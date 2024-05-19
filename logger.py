@@ -233,14 +233,12 @@ class Logger:
     def tb_add_metric_log(self, log: MetricLog, steps: int, mode: str):
         if (self.only_main and is_main_process()) or (self.only_main is False):
             log_keys = log.metrics.keys()
-            box_l1_loss_keys, box_giou_loss_keys, label_focal_loss_keys = [], [], []
+            mae_loss_keys, mse_loss_keys = [], []
             for k in log_keys:
-                if "box_l1_loss" in k:
-                    box_l1_loss_keys.append(k)  # like "frame0_box_l1_loss"
-                elif "box_giou_loss" in k:
-                    box_giou_loss_keys.append(k)
-                elif "label_focal_loss" in k:
-                    label_focal_loss_keys.append(k)
+                if "mae_loss" in k:
+                    mae_loss_keys.append(k)  # like "frame0_box_l1_loss"
+                elif "mse_loss" in k:
+                    mse_loss_keys.append(k)
                 else:
                     pass
             if mode == "iters":
@@ -248,23 +246,18 @@ class Logger:
             else:
                 writer: tb.SummaryWriter = self.tb_epochs_logger
             writer.add_scalars(
-                main_tag="box_l1_loss",
+                main_tag="mae_loss",
                 tag_scalar_dict={k.split("_")[0]: log.metrics[k].avg if mode == "iters" else log.metrics[k].global_avg
-                                 for k in box_l1_loss_keys},
+                                 for k in mae_loss_keys},
                 global_step=steps
             )
             writer.add_scalars(
-                main_tag="box_giou_loss",
+                main_tag="mse_loss",
                 tag_scalar_dict={k.split("_")[0]: log.metrics[k].avg if mode == "iters" else log.metrics[k].global_avg
-                                 for k in box_giou_loss_keys},
+                                 for k in mse_loss_keys},
                 global_step=steps
             )
-            writer.add_scalars(
-                main_tag="label_focal_loss",
-                tag_scalar_dict={k.split("_")[0]: log.metrics[k].avg if mode == "iters" else log.metrics[k].global_avg
-                                 for k in label_focal_loss_keys},
-                global_step=steps
-            )
+      
 
             if "total_loss" in log_keys:
                 writer.add_scalar(
