@@ -280,7 +280,7 @@ def train_one_epoch(model: FilterModule, train_states: dict, max_norm: float,
         iter_end_timestamp = time.time()
         metric_log.update(name="time per iter", value=iter_end_timestamp-iter_start_timestamp)
         # Outputs logs
-        if i % 10 == 0:
+        if i % 100 == 0:
             metric_log.sync()
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
