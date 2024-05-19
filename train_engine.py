@@ -244,6 +244,13 @@ def train_one_epoch(model: FilterModule, train_states: dict, max_norm: float,
 
     for i, batch in enumerate(dataloader):
         datas=convert_data(batch)
+        run=True
+        for data in datas:
+            if len(data["local_images"])==0:
+                run=False
+                break
+        if not run:
+            continue
         iter_start_timestamp = time.time()
 
         model_outputs= model(datas)
@@ -273,7 +280,7 @@ def train_one_epoch(model: FilterModule, train_states: dict, max_norm: float,
         iter_end_timestamp = time.time()
         metric_log.update(name="time per iter", value=iter_end_timestamp-iter_start_timestamp)
         # Outputs logs
-        if i % 100 == 0:
+        if i % 10 == 0:
             metric_log.sync()
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
