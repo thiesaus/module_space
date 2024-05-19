@@ -6,6 +6,7 @@ import yaml
 
 from torch.utils import tensorboard as tb
 
+from utils.utils import convert_data
 
 from utils.train_visualize import Visualize
 from model.criterion import ModuleCriterion
@@ -18,6 +19,13 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
         "mae_loss": [],
     }
     for i, batch in enumerate(dataloader):
+        datas=convert_data(batch)
+        for data in datas:
+            if len(data["local_images"])==0:
+                run=False
+                break
+        if not run:
+            continue
         model_outputs= model(batch)
         output=model_outputs["logits"]
         for out in output:
