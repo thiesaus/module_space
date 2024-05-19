@@ -26,7 +26,7 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
                 break
         if not run:
             continue
-        model_outputs= model(batch)
+        model_outputs= model(datas)
         output=model_outputs["logits"]
         for out in output:
             mse_loss = ModuleCriterion.get_mse_loss(outputs=out)
