@@ -37,7 +37,7 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
     avg_mse_loss = sum(loss["mse_loss"]) / len(loss["mse_loss"])
     avg_mae_loss = sum(loss["mae_loss"]) / len(loss["mae_loss"])
 
-    print(f"===>  Eval iter '{iter}' finished, mse_loss: {avg_mse_loss}, mae_loss: {avg_mae_loss}")
+    print(f"===>  Eval epoch '{epoch}' finished, mse_loss: {avg_mse_loss}, mae_loss: {avg_mae_loss}")
     visualizer.add_loss({"mse_loss":avg_mse_loss,"mae_loss":avg_mae_loss})
     visualizer.plot_loss()
     visualizer.save_plot()
