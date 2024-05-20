@@ -82,7 +82,7 @@ class ModuleCriterion:
         mse_loss = sum([ self.get_mse_loss(outputs=out) for out in model_out ]) / len(model_out)
 
         # 2. Compute the mae loss.
-        mae_loss = sum([ self.get_mse_loss(outputs=out) for out in model_out ]) / len(model_out) 
+        mae_loss = sum([ self.get_mae_loss(outputs=out) for out in model_out ]) / len(model_out) 
 
         self.loss["mse_loss"] = self.loss["mse_loss"] + mse_loss
         self.loss["mae_loss"] = self.loss["mae_loss"] + mae_loss
@@ -112,7 +112,7 @@ class ModuleCriterion:
         return loss
 
     @staticmethod
-    def get_mae_loss(self,outputs):
+    def get_mae_loss(outputs):
         """
         Computer the bounding box loss, l1 and giou.
         """
