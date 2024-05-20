@@ -153,7 +153,10 @@ class Logger:
 
     def show(self, head: str = "", log: MetricLog = ""):
         if (self.only_main and is_main_process()) or (self.only_main is False):
-            print(f"{head} {log.total_loss()}")
+            string=log
+            if isinstance(log, MetricLog):
+                string = log.total_loss()
+            print(f"{head} {string}")
         else:
             pass
         return
