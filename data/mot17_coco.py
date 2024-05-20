@@ -53,9 +53,9 @@ class MOT17_COCO(MOTDataset):
             random.setstate(multi_random_state)
         else:
             self.unified_random_state = None
-
-        self.mot17_seqs_dir = os.path.join(config["DATA_ROOT"], config["DATASET"].split("_")[0], "images", split).replace("MOT17/MOT17", "MOT17")
-        self.mot17_gts_dir = os.path.join(config["DATA_ROOT"], config["DATASET"].split("_")[0], "gts", split).replace("MOT17/MOT17", "MOT17")
+        _split="train"
+        self.mot17_seqs_dir = os.path.join(config["DATA_ROOT"], config["DATASET"].split("_")[0], "images", _split).replace("MOT17/MOT17", "MOT17")
+        self.mot17_gts_dir = os.path.join(config["DATA_ROOT"], config["DATASET"].split("_")[0], "gts", _split).replace("MOT17/MOT17", "MOT17")
         self.crowdhuman_seq_dir = os.path.join(config["DATA_ROOT"], "CrowdHuman", "images", "val")
         self.crowdhuman_gts_dir = os.path.join(config["DATA_ROOT"], "CrowdHuman", "gts", "val")
         # Training MOT17, using MOT17 train split and crowdhuman val splits

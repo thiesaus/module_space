@@ -12,7 +12,7 @@ from utils.train_visualize import Visualize
 from model.criterion import ModuleCriterion
 
 def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
-    print(f"===>  Running eval iter '{epoch}'")
+    print(f"===>  Running eval epoch '{epoch}'")
 
     loss= {
         "mse_loss":[],
