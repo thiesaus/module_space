@@ -19,6 +19,7 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
         "mae_loss": [],
     }
     for i, batch in enumerate(dataloader):
+        run=True
         datas=convert_data(batch)
         for data in datas:
             if len(data["local_images"])==0:
