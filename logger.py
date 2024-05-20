@@ -98,6 +98,8 @@ class MetricLog:
                 continue
             s += f"{name} = {value.avg:.4f} ({value.global_avg:.4f}); "
         return s
+    def total_loss(self):
+        return f"loss = {self.metrics['total_loss'].avg:.4f} "
 
 
 def merge_dicts(dicts: List[dict]) -> dict:
@@ -149,9 +151,9 @@ class Logger:
             self.tb_epochs_logger: tb.SummaryWriter | None = None
         return
 
-    def show(self, head: str = "", log: str | dict | MetricLog = ""):
+    def show(self, head: str = "", log: MetricLog = ""):
         if (self.only_main and is_main_process()) or (self.only_main is False):
-            print(f"{head} {log}")
+            print(f"{head} {log.total_loss()}")
         else:
             pass
         return
