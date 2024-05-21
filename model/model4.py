@@ -9,8 +9,8 @@ from utils.utils import distributed_rank
 class Model4(nn.Module):
     def __init__(self, ):
         super(Model4, self).__init__()
-        model, preprocess = clip.load("RN50",jit=False)
-        self.clip=model.float()
+        model, preprocess = clip.load("RN50")
+        self.clip=model
         self.preprocess=preprocess
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._freeze_encoder()
@@ -23,10 +23,10 @@ class Model4(nn.Module):
        
 
         # process image
-        self.process_reso=32*32
-        self.process_scale = self.process_reso ** -0.5
-        self.process_image_linear = nn.Linear(self.img_dim,self.img_dim ).to(self.device)
-        self.process_emb_position=nn.Parameter(self.process_scale * randn(  self.process_reso)).to(self.device)
+        # self.process_reso=32*32
+        # self.process_scale = self.process_reso ** -0.5
+        # self.process_image_linear = nn.Linear(self.img_dim,self.img_dim ).to(self.device)
+        # self.process_emb_position=nn.Parameter(self.process_scale * randn(  self.process_reso)).to(self.device)
 
         # text_local
         self.textual_local_linear = nn.Linear(self.text_dim, self.img_dim).to(self.device)
@@ -140,8 +140,8 @@ class Model4(nn.Module):
         #         sub_images.append(sub_image)
         temp=self.clip.encode_image(self.preprocess(image).float().unsqueeze(0).to(self.device))
         # processed_images=[ i + self.process_emb_position for i in temp]
-        linear_images=[self.process_image_linear(i) for i in temp]
-        concatened_images=torch.hstack(linear_images)
+        # linear_images=[self.process_image_linear(i) for i in temp]
+        concatened_images=torch.hstack(temp)
         return concatened_images
 
 
@@ -153,19 +153,14 @@ class Model4(nn.Module):
         global_image = global_image / global_image.norm(dim=-1, keepdim=True)
         global_image = global_image.repeat(len(x["local_images"]),1)
         
-        temp=self.clip.encode_image(torch.vstack([self.preprocess(image).float().unsqueeze(0) for image in x["local_images"]]).to(self.device))
-        # processed_images=[ i + self.process_emb_position for i in temp]
-        linear_images=[self.process_image_linear(i) for i in temp]
-        concatened_images=torch.vstack(linear_images)
         processed={
-            
-            "local_images":concatened_images,
+            "local_images":[ self.preprocess(i).to(self.device) for i in x["local_images"]],
             # "global_images":torch.vstack([ self.preprocess(x["global_image"]) for _ in x["local_images"]]).view(-1,3,224,224).to(self.device),
             "sentences":clip.tokenize(x["sentences"]).to(self.device)
         }
 
         feats={
-            "local_images": processed["local_images"],
+            "local_images":torch.vstack([ self.clip.encode_image(img.unsqueeze(0)).float() for img in processed["local_images"]]),
             # "global_images":self.clip.encode_image(processed["global_images"]),
             "sentences":self.clip.encode_text(processed["sentences"]).float()
         }
@@ -214,7 +209,7 @@ class Model4(nn.Module):
             key=full_feat,
             value=full_feat
         )
-        return fusion_feat[0] * text_feat
+        return fusion_feat[0] *  text_feat
     
 
 def build_model4(config: dict):
