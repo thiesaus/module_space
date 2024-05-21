@@ -25,7 +25,6 @@ class FilterModuleDrop(nn.Module):
         self.sentence_fc = nn.Linear(self.text_dim, self.img_dim).to(self.device)
         self.linear_fc = nn.Linear(self.text_dim, self.img_dim).to(self.device)
         self.image_fc = nn.Linear(self.img_dim, self.img_dim).to(self.device)
-        self.tg_drop=nn.Dropout(0.8).to(self.device)
         self.fusion_local_global = nn.MultiheadAttention(
             embed_dim=self.img_dim,
             num_heads=4,
@@ -69,7 +68,6 @@ class FilterModuleDrop(nn.Module):
         text_local_feat=self.textual_local(local_feat, text_feat)
         text_global_feat=self.textual_global(global_feat, text_feat)
 
-        text_global_feat=self.tg_drop(text_global_feat)
 
         stage1_feat=self.full_fusion(text_global_feat, text_local_feat)
         
@@ -126,12 +124,12 @@ class FilterModuleDrop(nn.Module):
     def textual_local(self, local_image, text_feat):
         text_feat = self.sentence_fc(text_feat)
         local_feat=local_image + self.pos_emb_local
-        fusion_feat= self.fusion_visual_textual(
+        fusion_feat= self.fusion_local_global(
             query=text_feat,
             key=local_feat,
             value=local_feat
         )
-        return fusion_feat[0] + local_feat
+        return fusion_feat[0] + text_feat
     
     def textual_global(self, global_image, text_feat):
         text_feat = self.sentence_fc(text_feat)
