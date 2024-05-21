@@ -19,6 +19,7 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
         "cross_text_image": [],
     }
     for i, batch in enumerate(dataloader):
+        print(f"===>  Running eval iter '{i}' / '{len(dataloader)}'")
         run=True
         datas=convert_data(batch)
         for data in datas:
