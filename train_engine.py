@@ -3,7 +3,6 @@ import torch
 from logger import Logger, ProgressLogger,MetricLog
 from torch.optim import Adam, AdamW
 from data import build_dataset, build_sampler, build_dataloader
-from model.filter_module_drop import build_model_drop
 from utils.utils import  is_distributed, distributed_rank, set_seed,distributed_world_size,is_main_process
 from typing import List, Tuple, Dict
 import torch.nn as nn
@@ -11,7 +10,7 @@ from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 import time
 from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
-from model.filter_module_drop import FilterModuleDrop
+from model.model4 import Model4,build_model4
 from torch.utils.data import DataLoader
 from utils.utils import convert_data
 from model.criterion import ModuleCriterion,build_criterion
@@ -26,7 +25,7 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_model_drop(config=config)
+    model = build_model4(config=config)
 
     # Load Pretrained Model
  
@@ -102,6 +101,8 @@ def train(config: dict):
     multi_checkpoint = "MULTI_CHECKPOINT" in config and config["MULTI_CHECKPOINT"]
     visualizer=Visualize()
     # Training:
+    eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=0)
+
     for epoch in range(start_epoch, config["EPOCHS"]):
         if is_distributed():
             sampler_train.set_epoch(epoch)
@@ -159,7 +160,7 @@ def train(config: dict):
                     optimizer=optimizer,
                     scheduler=scheduler
                 )
-        eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=epoch)
+        eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=epoch+1)
         time.sleep(1) ## prevent slush
     return
 
@@ -211,7 +212,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: FilterModuleDrop, train_states: dict, max_norm: float,
+def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
