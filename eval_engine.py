@@ -13,7 +13,7 @@ from model.criterion import ModuleCriterion
 
 def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
     print(f"===>  Running eval epoch '{epoch}'")
-
+    model.eval()
     loss= {
         "cross_image_text":[],
         "cross_text_image": [],
@@ -41,7 +41,7 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
     print(f"===>  Eval epoch '{epoch}' finished, cross_image_text: {avg_cross_image_text}, cross_text_image: {avg_cross_text_image}")
     visualizer.add_loss({"cross_image_text":avg_cross_image_text,"cross_text_image":avg_cross_text_image})
     visualizer.plot_loss()
-    
+    model.train()
     return
     # print(f"===>  Running checkpoint '{model}'")
 
