@@ -37,9 +37,9 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
             loss["cross_image_text"].append(cross_image_text)
             loss["cross_text_image"].append(cross_text_image)
         iter_end_timestamp = time.time()
-        epoch_minutes = int((iter_end_timestamp - iter_start_timestamp) // 60)
+        epoch_minutes = iter_end_timestamp - iter_start_timestamp
 
-        print(f"===>  Running eval iter '{i}' / '{len(dataloader)}' min '{epoch_minutes}' cross_image_text: {cross_image_text}, cross_text_image: {cross_text_image}")
+        print(f"===>  Running eval iter '{i}' / '{len(dataloader)}' sec '{epoch_minutes}' cross_image_text: {cross_image_text}, cross_text_image: {cross_text_image}")
 
 
     avg_cross_image_text = sum(loss["cross_image_text"]) / len(loss["cross_image_text"])
