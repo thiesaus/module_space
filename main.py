@@ -1,5 +1,5 @@
 import yaml
-from model.filter_module import FilterModule
+# from model.filter_module import FilterModule
 from train_engine import train
 
 
@@ -9,7 +9,7 @@ def yaml_to_dict(path: str):
 
 
 if __name__ == "__main__":
-    filter_module = FilterModule()
+    # filter_module = FilterModule()
 
     config = yaml_to_dict(".\\configs\\train_mot17_coco.yaml")
     config["DATA_ROOT"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR"

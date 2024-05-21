@@ -10,16 +10,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 import torch
-import copy
-from torch.nn import MSELoss,L1Loss
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed
-
-from typing import List, Tuple, Dict
-
-from utils.box_ops import generalized_box_iou, box_cxcywh_to_xyxy, box_iou_union
-from utils.utils import is_distributed, distributed_world_size
-from PIL import Image
 
 
 class ModuleCriterion:
@@ -50,16 +43,16 @@ class ModuleCriterion:
         self.device = device
         self.n_logits=[]
         self.loss = {
-            "mse_loss": torch.zeros(()).to(self.device).requires_grad_(),
-            "mae_loss": torch.zeros(()).to(self.device).requires_grad_(),
+            "cross_image_text": torch.zeros(()).to(self.device).requires_grad_(),
+            "cross_text_image": torch.zeros(()).to(self.device).requires_grad_(),
         }
 
     def get_sum_loss_dict(self, loss_dict: dict):
         def get_weight(loss_name):
-            if "mse_loss" in loss_name:
-                return self.weight["mse_loss"]
-            elif "mae_loss" in loss_name:
-                return self.weight["mae_loss"]
+            if "cross_image_text" in loss_name:
+                return self.weight["cross_image_text"]
+            elif "cross_text_image" in loss_name:
+                return self.weight["cross_text_image"]
         
         loss = sum([
             get_weight(k) * v for k, v in loss_dict.items()
@@ -79,16 +72,16 @@ class ModuleCriterion:
         """
         model_out=model_outputs["logits"]
         # 1. Compute the mse loss
-        mse_loss = sum([ self.get_mse_loss(outputs=out) for out in model_out ]) / len(model_out)
+        cross_image_text = sum([ self.get_cross_image_text_loss(outputs=out) for out in model_out ])
 
         # 2. Compute the mae loss.
-        mae_loss = sum([ self.get_mae_loss(outputs=out) for out in model_out ]) / len(model_out) 
+        cross_text_image = sum([ self.get_cross_text_image_loss(outputs=out) for out in model_out ]) 
 
-        self.loss["mse_loss"] = self.loss["mse_loss"] + mse_loss
-        self.loss["mae_loss"] = self.loss["mae_loss"] + mae_loss
+        self.loss["cross_image_text"] = self.loss["cross_image_text"] + cross_image_text
+        self.loss["cross_text_image"] = self.loss["cross_text_image"] + cross_text_image
         # Update logs.
-        self.log[f"batch{batch_idx}_mse_loss"] = mse_loss.item()
-        self.log[f"batch{batch_idx}_mae_loss"] = mae_loss.item()
+        self.log[f"batch{batch_idx}_cross_image_text"] = cross_image_text.item()
+        self.log[f"batch{batch_idx}_cross_text_image"] = cross_text_image.item()
 
         return 
     def get_loss_and_log(self):
@@ -108,7 +101,7 @@ class ModuleCriterion:
         shape = logits.shape
         target= torch.ones(shape[0],shape[1],dtype=torch.float32).to(outputs.device)
        
-        loss =  MSELoss()(logits, target)
+        loss =  nn.MSELoss()(logits, target)
         return loss
 
     @staticmethod
@@ -120,14 +113,37 @@ class ModuleCriterion:
         shape = logits.shape
         target= torch.ones(shape[0],shape[1],dtype=torch.float32).to(outputs.device)
        
-        loss =  L1Loss()(logits, target)
+        loss =  nn.L1Loss()(logits, target)
         return loss
+
+    @staticmethod
+    def get_cross_image_text_loss(outputs):
+        """
+        Computer the bounding box loss, l1 and giou.
+        """
+        logits=outputs 
+        temperature = torch.tensor(0.2)
+        shape = logits.shape
+        super_logits= logits * torch.exp(temperature)
+        loss= nn.CrossEntropyLoss()(super_logits, torch.arange(shape[0]).to(super_logits.device))
+        return loss
+    
+    
+    @staticmethod
+    def get_cross_text_image_loss(outputs):
+        logits=outputs 
+        temperature = torch.tensor(0.2)
+        shape = logits.shape
+        super_logits= logits * torch.exp(temperature)
+        loss = nn.CrossEntropyLoss()(super_logits.T, torch.arange(shape[0]).to(super_logits.device))
+        return loss
+
 
 def build_criterion(config: dict):
   
     return ModuleCriterion(
         weight={
-            "mse_loss": 1,
-            "mae_loss": 1,
+            "cross_text_image": 1,
+            "cross_image_text": 1,
         },
     )

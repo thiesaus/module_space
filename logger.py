@@ -238,12 +238,12 @@ class Logger:
     def tb_add_metric_log(self, log: MetricLog, steps: int, mode: str):
         if (self.only_main and is_main_process()) or (self.only_main is False):
             log_keys = log.metrics.keys()
-            mae_loss_keys, mse_loss_keys = [], []
+            cross_image_text_keys, cross_text_image_keys = [], []
             for k in log_keys:
-                if "mae_loss" in k:
-                    mae_loss_keys.append(k)  # like "frame0_box_l1_loss"
-                elif "mse_loss" in k:
-                    mse_loss_keys.append(k)
+                if "cross_image_text" in k:
+                    cross_image_text_keys.append(k)  # like "frame0_box_l1_loss"
+                elif "cross_text_image" in k:
+                    cross_text_image_keys.append(k)
                 else:
                     pass
             if mode == "iters":
@@ -251,15 +251,15 @@ class Logger:
             else:
                 writer: tb.SummaryWriter = self.tb_epochs_logger
             writer.add_scalars(
-                main_tag="mae_loss",
+                main_tag="cross_image_text",
                 tag_scalar_dict={k.split("_")[0]: log.metrics[k].avg if mode == "iters" else log.metrics[k].global_avg
-                                 for k in mae_loss_keys},
+                                 for k in cross_image_text_keys},
                 global_step=steps
             )
             writer.add_scalars(
-                main_tag="mse_loss",
+                main_tag="cross_text_image",
                 tag_scalar_dict={k.split("_")[0]: log.metrics[k].avg if mode == "iters" else log.metrics[k].global_avg
-                                 for k in mse_loss_keys},
+                                 for k in cross_text_image_keys},
                 global_step=steps
             )
       

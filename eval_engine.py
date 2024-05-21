@@ -15,8 +15,8 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
     print(f"===>  Running eval epoch '{epoch}'")
 
     loss= {
-        "mse_loss":[],
-        "mae_loss": [],
+        "cross_image_text":[],
+        "cross_text_image": [],
     }
     for i, batch in enumerate(dataloader):
         run=True
@@ -30,16 +30,16 @@ def eval_model(model: str,visualizer:Visualize, dataloader: str,epoch:int):
         model_outputs= model(datas)
         output=model_outputs["logits"]
         for out in output:
-            mse_loss = ModuleCriterion.get_mse_loss(outputs=out)
-            mae_loss = ModuleCriterion.get_mae_loss(outputs=out)
-            loss["mse_loss"].append(mse_loss)
-            loss["mae_loss"].append(mae_loss)
+            cross_image_text = ModuleCriterion.get_cross_image_text_loss(outputs=out)
+            cross_text_image = ModuleCriterion.get_cross_text_image_loss(outputs=out)
+            loss["cross_image_text"].append(cross_image_text)
+            loss["cross_text_image"].append(cross_text_image)
 
-    avg_mse_loss = sum(loss["mse_loss"]) / len(loss["mse_loss"])
-    avg_mae_loss = sum(loss["mae_loss"]) / len(loss["mae_loss"])
+    avg_cross_image_text = sum(loss["cross_image_text"]) / len(loss["cross_image_text"])
+    avg_cross_text_image = sum(loss["cross_text_image"]) / len(loss["cross_text_image"])
 
-    print(f"===>  Eval epoch '{epoch}' finished, mse_loss: {avg_mse_loss}, mae_loss: {avg_mae_loss}")
-    visualizer.add_loss({"mse_loss":avg_mse_loss,"mae_loss":avg_mae_loss})
+    print(f"===>  Eval epoch '{epoch}' finished, cross_image_text: {avg_cross_image_text}, cross_text_image: {avg_cross_text_image}")
+    visualizer.add_loss({"cross_image_text":avg_cross_image_text,"cross_text_image":avg_cross_text_image})
     visualizer.plot_loss()
     
     return
