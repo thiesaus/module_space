@@ -185,8 +185,8 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
         return matched
     # keywords
     backbone_keywords = ["clip"]
-    fusion_keywords = ["fusion_local_global", "fusion_visual_textual"]  # 在 transformer 中用于选取参考点和采样点的网络参数关键字
-    middle_fusion_keywords = ["fusion_fc","middle_layer"]
+    fusion_keywords = ["fusion_text_local", "fusion_text_global","full_fusion_layer","repeat_text_layer"]  # 在 transformer 中用于选取参考点和采样点的网络参数关键字
+    middle_fusion_keywords = ["repeat_linear","textual_global_linear","textual_local_linear"]
     param_groups = [
         {   # backbone 学习率设置
             "params": [p for n, p in model.named_parameters() if match_keywords(n, backbone_keywords) and p.requires_grad],
