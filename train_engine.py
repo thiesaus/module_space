@@ -84,6 +84,7 @@ def train(config: dict):
 
     # Resume
     if config["RESUME"] is not None:
+        print("Loading checkpoint {}".format(config["RESUME"]))
         if config["RESUME_SCHEDULER"]:
             load_checkpoint(model=model, path=config["RESUME"], states=train_states,
                             optimizer=optimizer, scheduler=scheduler)
@@ -91,7 +92,7 @@ def train(config: dict):
             load_checkpoint(model=model, path=config["RESUME"], states=train_states)
             for _ in range(train_states["start_epoch"]):
                 scheduler.step()
-        prinnt("Loading checkpoint {}".format(config["RESUME"]))
+        print("Loaded checkpoint {}".format(config["RESUME"]))
     # Set start epoch
     start_epoch = train_states["start_epoch"]
 
