@@ -91,7 +91,7 @@ def train(config: dict):
             load_checkpoint(model=model, path=config["RESUME"], states=train_states)
             for _ in range(train_states["start_epoch"]):
                 scheduler.step()
-
+        prinnt("Loading checkpoint {}".format(config["RESUME"]))
     # Set start epoch
     start_epoch = train_states["start_epoch"]
 
