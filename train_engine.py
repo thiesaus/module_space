@@ -183,9 +183,9 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
                 break
         return matched
     # keywords
-    backbone_keywords = ["clip"]
-    fusion_keywords = ["fusion_local_global", "fusion_visual_textual"]  # 在 transformer 中用于选取参考点和采样点的网络参数关键字
-    middle_fusion_keywords = ["fusion_fc","middle_layer"]
+    backbone_keywords = ["swinv2_model","bert_model"]
+    process_keywords = ["reprocess_image","text_linear"]
+    fusion_keywords = ["fusion_text_local", "fusion_text_global","full_fusion_layer","repeat_text_layer"]  # 在 transformer 中用于选取参考点和采样点的网络参数关键字
     param_groups = [
         {   # backbone 学习率设置
             "params": [p for n, p in model.named_parameters() if match_keywords(n, backbone_keywords) and p.requires_grad],
@@ -197,14 +197,14 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
             "lr": config["LR_POINTS"]
         },
         {
-            "params": [p for n, p in model.named_parameters() if match_keywords(n, middle_fusion_keywords)
+            "params": [p for n, p in model.named_parameters() if match_keywords(n, process_keywords)
                        and p.requires_grad],
             "lr": config["LR"]
         },
         {
             "params": [p for n, p in model.named_parameters() if not match_keywords(n, backbone_keywords)
                        and not match_keywords(n, fusion_keywords)
-                       and not match_keywords(n, middle_fusion_keywords)
+                       and not match_keywords(n, process_keywords)
                        and p.requires_grad],
             "lr": config["LR"]
         }
