@@ -59,8 +59,10 @@ class FusionBlock(nn.Module):
         self.device=device
         self.img_dim = img_dim
         self.text_dim = text_dim    
-        self.emb = nn.Parameter( img_dim).to(self.device)
-        self.emb2 = nn.Parameter( text_dim).to(self.device)
+        local_reso = 16* 16
+        local_scale = local_reso ** -0.5
+        self.emb = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
+        self.emb2 = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
