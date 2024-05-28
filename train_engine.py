@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model6-2", 
+      name=f"experiment_model6-grad", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -275,7 +275,6 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss_dict,log_dict=criterion.get_loss_and_log()
 
         loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
-        wandb.log({ "loss": loss.item(),"epoch":epoch,"iter":i})
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
         loss = loss / accumulation_steps
@@ -300,6 +299,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
             second_per_iter = metric_log.metrics["time per iter"].avg
+            wandb.log({ "total":{"epoch":epoch,"iter":i,"loss":loss.item(),"sec":second_per_iter} })
             logger.show(head=f"[Epoch={epoch}, Iter={i}, "
                             f"{second_per_iter:.2f}s/iter, "
                             f"{i}/{dataloader_len} iters, "

@@ -12,24 +12,24 @@ class BasicBlock(nn.Module):
         self.is_downsample = is_downsample
         if is_downsample:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=2, padding=1, bias=False)
+                c_in, c_out, 3, stride=2, padding=1, bias=False).requires_grad_()
         else:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(c_out)
-        self.relu = nn.ReLU(True)
+                c_in, c_out, 3, stride=1, padding=1, bias=False).requires_grad_()
+        self.bn1 = nn.BatchNorm2d(c_out).requires_grad_()
+        self.relu = nn.ReLU(True).requires_grad_()
         self.conv2 = nn.Conv2d(c_out, c_out, 3, stride=1,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(c_out)
+                               padding=1, bias=False).requires_grad_()
+        self.bn2 = nn.BatchNorm2d(c_out).requires_grad_()
         if is_downsample:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False),
-                nn.BatchNorm2d(c_out)
+                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False).requires_grad_(),
+                nn.BatchNorm2d(c_out).requires_grad_()
             )
         elif c_in != c_out:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False),
-                nn.BatchNorm2d(c_out)
+                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False).requires_grad_(),
+                nn.BatchNorm2d(c_out).requires_grad_()
             )
             self.is_downsample = True
 
@@ -61,13 +61,13 @@ class FusionBlock(nn.Module):
         self.text_dim = text_dim    
         local_reso = 16* 16
         local_scale = local_reso ** -0.5
-        self.emb = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
-        self.emb2 = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
+        self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
         dropout=0.,
-        ).to(self.device)
+        ).to(self.device).requires_grad_()
     
     def forward(self, query, key,is_add=False,is_mul=False):
         _query = query +self.emb
@@ -135,20 +135,20 @@ class Model4(nn.Module):
         self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
 
         #reprocess text
-        self.text_linear = nn.Linear(768, 384).to(self.device)
-        self.text_linear1 = nn.Linear(384, 192).to(self.device)
-        self.text_linear2 = nn.Linear(192, 96).to(self.device)
-        self.text_linear3 = nn.Linear(96, 64).to(self.device)
-        self.text_linear4 = nn.Linear(4096, 2048).to(self.device)
-        self.text_linear5 = nn.Linear(2048, 1024).to(self.device)
-        self.text_linear6 = nn.Linear(1024, 512).to(self.device)
-        self.text_linear7 = nn.Linear(512, 256).to(self.device)
+        self.text_linear = nn.Linear(768, 384).to(self.device).requires_grad_()
+        self.text_linear1 = nn.Linear(384, 192).to(self.device).requires_grad_()
+        self.text_linear2 = nn.Linear(192, 96).to(self.device).requires_grad_()
+        self.text_linear3 = nn.Linear(96, 64).to(self.device).requires_grad_()
+        self.text_linear4 = nn.Linear(4096, 2048).to(self.device).requires_grad_()
+        self.text_linear5 = nn.Linear(2048, 1024).to(self.device).requires_grad_()
+        self.text_linear6 = nn.Linear(1024, 512).to(self.device).requires_grad_()
+        self.text_linear7 = nn.Linear(512, 256).to(self.device).requires_grad_()
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
         self.numlayers=8
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
  
-        self.logit_scale = nn.Parameter(torch.tensor(10.0)).to(self.device)
+        self.logit_scale = nn.Parameter(torch.tensor(10.0),requires_grad=True).to(self.device)
 
     
     def forward(self, x):
@@ -173,7 +173,7 @@ class Model4(nn.Module):
         # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
         full_feat=None
         for block in self.supa_layer:
-            text_feat,local_feat, full_feat = block(text_feat,local_feat ,full_feat)
+            local_feat,text_feat, full_feat = block(local_feat,text_feat ,full_feat)
 
         all_logits=[]
         for i,quantity in enumerate(quantities):
