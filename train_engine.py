@@ -16,6 +16,7 @@ from utils.utils import convert_data
 from model.criterion import ModuleCriterion,build_criterion
 from eval_engine import eval_model
 from utils.train_visualize import Visualize
+import wandb
 
 def train(config: dict):
     train_logger = Logger(logdir=os.path.join( config["OUTPUTS_DIR"], "train"), only_main=True)
@@ -61,6 +62,17 @@ def train(config: dict):
     # Optimizer
     param_groups, lr_names = get_param_groups(config=config, model=model)
     optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
+    wandb.init(
+      # Set the project where this run will be logged
+      project="basic-intro", 
+      # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
+      name=f"experiment_model6", 
+      # Track hyperparameters and run metadata
+      config={
+      "architecture": "Transformer",
+      "epochs": 10,
+      })
+  
     # Scheduler
     if config["LR_SCHEDULER"] == "MultiStep":
         scheduler = MultiStepLR(
@@ -99,9 +111,9 @@ def train(config: dict):
     #     model = DDP(module=model, device_ids=[distributed_rank()], find_unused_parameters=False)
 
     multi_checkpoint = "MULTI_CHECKPOINT" in config and config["MULTI_CHECKPOINT"]
-    visualizer=Visualize()
+    # visualizer=Visualize()
     # Training:
-    eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=0)
+    # eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=0)
 
     for epoch in range(start_epoch, config["EPOCHS"]):
         if is_distributed():
@@ -160,8 +172,9 @@ def train(config: dict):
                     optimizer=optimizer,
                     scheduler=scheduler
                 )
-        eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=epoch+1)
-        time.sleep(1) ## prevent slush
+        # eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=epoch+1)
+        # time.sleep(1) ## prevent slush
+    wandb.finish()
     return
 
 def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[str]]:
@@ -262,7 +275,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss_dict,log_dict=criterion.get_loss_and_log()
 
         loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
-
+        wandb.log({ "loss": loss.item()})
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
         loss = loss / accumulation_steps
