@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model6-1", 
+      name=f"experiment_model6-2", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -275,7 +275,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss_dict,log_dict=criterion.get_loss_and_log()
 
         loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
-        wandb.log({ "loss": loss.item()})
+        wandb.log({ "loss": loss.item(),"epoch":epoch,"iter":i})
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
         loss = loss / accumulation_steps

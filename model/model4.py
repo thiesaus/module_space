@@ -173,7 +173,7 @@ class Model4(nn.Module):
         # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
         full_feat=None
         for block in self.supa_layer:
-            local_feat, text_feat, full_feat = block(local_feat, text_feat,full_feat)
+            text_feat,local_feat, full_feat = block(text_feat,local_feat ,full_feat)
 
         all_logits=[]
         for i,quantity in enumerate(quantities):
