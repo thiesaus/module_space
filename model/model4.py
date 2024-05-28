@@ -53,6 +53,66 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
             blocks += [BasicBlock(c_out, c_out), ]
     return nn.Sequential(*blocks)
 
+class FusionBlock(nn.Module):
+    def __init__(self,img_dim, text_dim,num_heads=4,device="cuda"):
+        super(FusionBlock, self).__init__()
+        self.device=device
+        self.img_dim = img_dim
+        self.text_dim = text_dim    
+        local_reso = 16* 16
+        local_scale = local_reso ** -0.5
+        self.emb = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
+        self.linear = nn.Linear(self.text_dim, self.img_dim).to(self.device)
+        self.fusion = nn.MultiheadAttention(
+        embed_dim=self.img_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device)
+    
+    def forward(self, query, key,is_add=False,is_mul=False):
+        query = self.linear(query)
+        key = key + self.emb
+        fusion_feat = self.fusion(
+            query=query,
+            key=key,
+            value=key
+        )
+        if is_add:
+            return fusion_feat[0] + query
+        if is_mul:
+            return fusion_feat[0] * query
+
+class ZicZacBlock(nn.Module):
+    def __init__(self,img_dim, text_dim,num_heads=4,is_last=False,device="cuda"):
+        super(ZicZacBlock, self).__init__()
+        self.device=device
+        self.img_dim = img_dim
+        self.text_dim = text_dim    
+        self.text_local= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.local_text= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.is_last=is_last
+
+    def forward(self, query, key,res=None):
+        if res is not None:
+            fusion_1_1=self.text_local(query, res,is_add=True)
+            if self.is_last:
+                return query,key,self.local_text(key, fusion_1_1,is_mul=True)
+            fusion_1_2=self.local_text(key, fusion_1_1,is_add=True)
+            return query,key, fusion_1_2
+        
+        fusion_1_1=self.text_local(query, key,is_add=True)
+        if self.is_last:
+            return query,key, self.local_text(key, fusion_1_1,is_mul=True)
+        fusion_1_2=self.local_text(key, fusion_1_1,is_add=True)
+        return query,key, fusion_1_2
+       
+
+def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
+    blocks = []
+    for i in range(repeat_times):
+        blocks += [ZicZacBlock(img_dim, text_dim,device=device), ]
+    blocks+=[ZicZacBlock(img_dim, text_dim,is_last=True,device=device)]
+    return blocks
 
 class Model4(nn.Module):
     def __init__(self, ):
@@ -66,7 +126,6 @@ class Model4(nn.Module):
         self._freeze_encoder()
 
         self.img_dim = 256
-        self.image_crop=4
         self.text_dim = 256
       
         #reprocess image
@@ -85,55 +144,53 @@ class Model4(nn.Module):
         self.text_linear6 = nn.Linear(1024, 512).to(self.device)
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-       
+        self.numlayers=8
+        self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
-        # process image
-        # self.process_reso=32*32
-        # self.process_scale = self.process_reso ** -0.5
-        # self.process_image_linear = nn.Linear(self.img_dim,self.img_dim ).to(self.device)
-        # self.process_emb_position=nn.Parameter(self.process_scale * randn(  self.process_reso)).to(self.device)
+ 
+        self.logit_scale = nn.Parameter(torch.tensor(10.0)).to(self.device)
 
+    
+    def forward(self, x):
+        batch_feats=[self.processing_input(i) for i in x] # arr([{"local_images":PIL.Image[n],"global_images":1,"sentences":str[m]}])
+        #example
 
+        quantities=[batch["local_images"].shape[0] for batch in batch_feats] # arr([n1,n2,n3,...])
+        norm_feats={k:torch.vstack([i[k] for i in batch_feats]) for k in batch_feats[0].keys()} 
 
-        # text_local
-        self.textual_local_linear =nn.Linear(self.text_dim, self.img_dim).to(self.device)
-        local_reso = 16* 16
-        local_scale = local_reso ** -0.5
-        self.pos_emb_local = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
-        self.fusion_text_local = nn.MultiheadAttention(
-            embed_dim=self.img_dim,
-            num_heads=4,
-            dropout=0.,
-        ).to(self.device)
+        #fusion local_global
+        _local_feat=norm_feats["local_images"].requires_grad_()
+        # _global_feat=norm_feats["global_images"].requires_grad_()
+        text_feat=norm_feats["sentences"].requires_grad_()
 
-        # #text_global
-        self.textual_global_linear = nn.Linear(self.text_dim, self.img_dim).to(self.device)
-        global_reso =16* 16
-        global_scale = global_reso ** -0.5
-        self.pos_emb_global = nn.Parameter(global_scale * randn(global_reso)).to(self.device)
-        self.fusion_text_global = nn.MultiheadAttention(
-                embed_dim=self.img_dim,
-                num_heads=4,
-                dropout=0,
-            ).to(self.device)
+        _local_feat=rearrange(_local_feat,"b (h w) c -> b c h w",h=8)
+        # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
 
-        # #full_fusion
-         
-        self.full_fusion_layer = nn.MultiheadAttention(
-            embed_dim=self.img_dim,
-            num_heads=4,
-            dropout=0,
-        ).to(self.device)
+        local_feat=self.cnn_image(_local_feat)
+        # global_feat=self.cnn_image(_global_feat)
 
-        # #repeat_text
-        self.repeat_linear = nn.Linear(self.text_dim, self.img_dim).to(self.device)
+        local_feat=rearrange(local_feat,"b c h w -> b (h w c)")
+        # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
+        full_feat=None
+        for block in self.supa_layer:
+            local_feat, text_feat, full_feat = block(local_feat, text_feat,full_feat)
 
-        self.repeat_text_layer = nn.MultiheadAttention(
-            embed_dim=self.img_dim,
-            num_heads=4,
-            dropout=0,
-        ).to(self.device)
+        all_logits=[]
+        for i,quantity in enumerate(quantities):
+            ff=full_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else full_feat[i*quantity:]
+            lf=local_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else local_feat[i*quantity:]
+            logits=[]
+            
+            for fs_f in ff:
+                logit=[]
+                for text_f in lf:
+                    # logit.append(F.cosine_similarity(fs_f, text_f,dim=-1).item())
+                    logit.append(self.logit_scale.exp() * fs_f @ text_f)
+                logits.append(logit)
+            all_logits.append( torch.tensor(logits,device=self.device))
 
+        return dict({"logits": all_logits}  )
+    
 
     def _freeze_encoder(self):
         """
@@ -215,61 +272,13 @@ class Model4(nn.Module):
         last_hidden_states = outputs.last_hidden_state
         return last_hidden_states 
 
-    def forward(self, x):
-        batch_feats=[self.processing_input(i) for i in x] # arr([{"local_images":PIL.Image[n],"global_images":1,"sentences":str[m]}])
-        #example
-
-        quantities=[batch["local_images"].shape[0] for batch in batch_feats] # arr([n1,n2,n3,...])
-        norm_feats={k:torch.vstack([i[k] for i in batch_feats]) for k in batch_feats[0].keys()} 
-
-        #fusion local_global
-        _local_feat=norm_feats["local_images"].requires_grad_()
-        _global_feat=norm_feats["global_images"].requires_grad_()
-        text_feat=norm_feats["sentences"].requires_grad_()
-
-        _local_feat=rearrange(_local_feat,"b (h w) c -> b c h w",h=8)
-        _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
-
-        local_feat=self.cnn_image(_local_feat)
-        global_feat=self.cnn_image(_global_feat)
-
-        local_feat=rearrange(local_feat,"b c h w -> b (h w c)")
-        global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
-
-        text_local_feat=self.textual_local(local_feat, text_feat)
-        text_global_feat=self.textual_global(global_feat, text_feat)
-
-
-        full_fusion_feat=self.full_fusion(text_global_feat, text_local_feat)
-        
-        full_feat=self.repeat_text(text_feat, full_fusion_feat)
-
-
-        all_logits=[]
-        for i,quantity in enumerate(quantities):
-            ff=full_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else full_feat[i*quantity:]
-            lf=local_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else local_feat[i*quantity:]
-            logits=[]
-            
-            for fs_f in ff:
-                logit=[]
-                for text_f in lf:
-                    logit.append(F.cosine_similarity(fs_f, text_f,dim=-1).item())
-                logits.append(logit)
-            all_logits.append( torch.Tensor(logits).to(self.device))
-
-       
-        
-        return dict({"logits": all_logits}  )
-    
-
 
 
     def processing_input(self,x):
-        global_image = x["global_image"]
-        global_image = self.process_image(global_image)
-        global_image = global_image / global_image.norm(dim=-1, keepdim=True)
-        global_image = global_image.repeat(len(x["local_images"]),1,1)
+        # global_image = x["global_image"]
+        # global_image = self.process_image(global_image)
+        # global_image = global_image / global_image.norm(dim=-1, keepdim=True)
+        # global_image = global_image.repeat(len(x["local_images"]),1,1)
         
         processed={
             "local_images": self.process_image(x["local_images"]),
@@ -285,54 +294,14 @@ class Model4(nn.Module):
         norm_feats={
             "local_images":feats["local_images"]/feats["local_images"].norm(dim=-1, keepdim=True),
             # "global_images":feats["global_images"]/feats["global_images"].norm(dim=-1, keepdim=True),
-            "global_images":global_image,
+            # "global_images":global_image,
             "sentences":feats["sentences"]/feats["sentences"].norm(dim=-1, keepdim=True)
         }
    
         return norm_feats
     
 
-    def textual_local(self, local_image, text_feat):
-        text_feat = self.textual_local_linear(text_feat)
-        local_feat=local_image + self.pos_emb_local
-        fusion_feat= self.fusion_text_local(
-            query=text_feat,
-            key=local_feat,
-            value=local_feat
-        )
-        return fusion_feat[0] + text_feat
-    
-    def textual_global(self, global_image, text_feat):
-        text_feat = self.textual_global_linear(text_feat)
-        global_feat=global_image + self.pos_emb_global
-        fusion_feat= self.fusion_text_global(
-            query=text_feat,
-            key=global_feat,
-            value=global_feat
-        )
-        return fusion_feat[0] + text_feat
-   
-    def full_fusion(self,gt_feat,lt_feat):
-        fusion_feat= self.full_fusion_layer(
-            query=lt_feat,
-            key=gt_feat,
-            value=gt_feat
-        )
-        return fusion_feat[0] + lt_feat
-    
-    def repeat_text(self, text_feat, full_feat):
-        text_feat = self.repeat_linear(text_feat)
-        fusion_feat= self.repeat_text_layer(
-            query=text_feat,
-            key=full_feat,
-            value=full_feat
-        )
-        return fusion_feat[0] *  text_feat
-    
-
 def build_model4(config: dict):
-
-
 
     model = Model4()
     if config["AVAILABLE_GPUS"] is not None and config["DEVICE"] == "cuda":

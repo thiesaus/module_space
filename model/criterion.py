@@ -122,20 +122,15 @@ class ModuleCriterion:
         Computer the bounding box loss, l1 and giou.
         """
         logits=outputs 
-        temperature = torch.tensor(0.2)
-        shape = logits.shape
-        super_logits= logits * torch.exp(temperature)
-        loss= nn.CrossEntropyLoss()(super_logits, torch.arange(shape[0]).to(super_logits.device))
+      
+        loss= nn.CrossEntropyLoss()(logits, torch.arange(logits.shape[0],device=logits.device))
         return loss
     
     
     @staticmethod
     def get_cross_text_image_loss(outputs):
-        logits=outputs 
-        temperature = torch.tensor(0.2)
-        shape = logits.shape
-        super_logits= logits * torch.exp(temperature)
-        loss = nn.CrossEntropyLoss()(super_logits.T, torch.arange(shape[0]).to(super_logits.device))
+        logits=outputs.t() 
+        loss= nn.CrossEntropyLoss()(logits, torch.arange(logits.shape[0],device=logits.device))
         return loss
 
 
