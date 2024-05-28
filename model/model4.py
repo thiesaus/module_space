@@ -59,10 +59,8 @@ class FusionBlock(nn.Module):
         self.device=device
         self.img_dim = img_dim
         self.text_dim = text_dim    
-        local_reso = 16* 16
-        local_scale = local_reso ** -0.5
-        self.emb = nn.Parameter(local_scale * randn(local_reso)).to(self.device)
-        self.linear = nn.Linear(self.text_dim, self.img_dim).to(self.device)
+        self.emb = nn.Parameter( img_dim).to(self.device)
+        self.emb2 = nn.Parameter( text_dim).to(self.device)
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
@@ -70,12 +68,12 @@ class FusionBlock(nn.Module):
         ).to(self.device)
     
     def forward(self, query, key,is_add=False,is_mul=False):
-        query = self.linear(query)
-        key = key + self.emb
+        _query = query +self.emb
+        _key = key +self.emb2
         fusion_feat = self.fusion(
-            query=query,
-            key=key,
-            value=key
+            query=_query,
+            key=_key,
+            value=_key
         )
         if is_add:
             return fusion_feat[0] + query
