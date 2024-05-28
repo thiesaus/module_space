@@ -36,10 +36,10 @@ def train(config: dict):
     dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
                                         batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
     
-    dataset_test = build_dataset(config=config, split="test")
-    sampler_test = build_sampler(dataset=dataset_test, shuffle=True)
-    dataloader_test = build_dataloader(dataset=dataset_test, sampler=sampler_test,
-                                        batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
+    # dataset_test = build_dataset(config=config, split="test")
+    # sampler_test = build_sampler(dataset=dataset_test, shuffle=True)
+    # dataloader_test = build_dataloader(dataset=dataset_test, sampler=sampler_test,
+    #                                     batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
 
     
     if config['GET_DATA_SUBSET'] is True and config['SUBSET_LENGTH'] > 0:
@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model6-grad", 
+      name=f"experiment_model6-model7", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -259,11 +259,13 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
 
     for i, batch in enumerate(dataloader):
         datas=convert_data(batch)
+        sentence=batch["sentence"][0]
         run=True
-        for data in datas:
+        for i, data in enumerate(datas):
             if len(data["local_images"])==0:
                 run=False
                 break
+            datas[i]["sentence"]=sentence
         if not run:
             continue
         iter_start_timestamp = time.time()
@@ -277,6 +279,9 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
+        if i %100==0:
+            wandb.log({ "total":{"epoch":epoch,"iter":i,"loss":loss.item()} })
+
         loss = loss / accumulation_steps
         loss.backward()
 
@@ -299,7 +304,6 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
             second_per_iter = metric_log.metrics["time per iter"].avg
-            wandb.log({ "total":{"epoch":epoch,"iter":i,"loss":loss.item(),"sec":second_per_iter} })
             logger.show(head=f"[Epoch={epoch}, Iter={i}, "
                             f"{second_per_iter:.2f}s/iter, "
                             f"{i}/{dataloader_len} iters, "

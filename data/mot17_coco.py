@@ -97,20 +97,22 @@ class MOT17_COCO(MOTDataset):
         text_key = self.mot17_data_annotations['text_key']
         for vid in self.mot17_seq_names:
             quantity = len(text_key[vid])
-            print(f"Quantity: {quantity}, 80%: {int(quantity*0.8)}")
+            # print(f"Quantity: {quantity}, 80%: {int(quantity*0.8)}")
             for q,t in enumerate(text_key[vid]):
                 num=int(t) +1
                 sentences= list(text_key[vid][t].keys())
                 for sentence in sentences:
+                    if sentence == 'null': # sentence is null when there is lack of either appearance or action caption for the person
+                        continue
                     for line in text_key[vid][t][sentence]:
                         i= line["track_id"]
                         x, y, w, h = line["bbox"]
                         i, x, y, w, h = map(int, (i, x, y, w, h))
                         self.mot17_gts[vid][num][sentence].append([i, x, y, w, h])
-                        if q<int(quantity*0.8):
-                            self.mot17_gts_train[vid][num][sentence].append([i, x, y, w, h])
-                        else:
-                            self.mot17_gts_val[vid][num][sentence].append([i, x, y, w, h])
+                        # if q<int(quantity*0.8):
+                        self.mot17_gts_train[vid][num][sentence].append([i, x, y, w, h])
+                        # else:
+                            # self.mot17_gts_val[vid][num][sentence].append([i, x, y, w, h])
 
         
 
@@ -144,14 +146,14 @@ class MOT17_COCO(MOTDataset):
 
     def __getitem__(self, item):
         
-        # begin_sentence = self.sample_begin_frame_paths[item]["sentence"]
-        # begin_frame_path = self.sample_begin_frame_paths[item]["path"]
-        # frame_paths = self.sample_frame_paths(begin_frame_path=begin_frame_path)
-        # imgs,ori_imgs, infos = self.get_multi_frames(frame_paths=frame_paths,sentence=begin_sentence)
-
-        begin_frame_path = self.sample_begin_frame_paths[item]
+        begin_sentence = self.sample_begin_frame_paths[item]["sentence"]
+        begin_frame_path = self.sample_begin_frame_paths[item]["path"]
         frame_paths = self.sample_frame_paths(begin_frame_path=begin_frame_path)
-        imgs, infos = self.get_multi_frames(frame_paths=frame_paths)
+        imgs, infos = self.get_multi_frames(frame_paths=frame_paths,sentence=begin_sentence)
+
+        # begin_frame_path = self.sample_begin_frame_paths[item]
+        # frame_paths = self.sample_frame_paths(begin_frame_path=begin_frame_path)
+        # imgs, infos = self.get_multi_frames(frame_paths=frame_paths)
         if(self.config["NO_TRANSFORM"]==False):
             if infos[0]["dataset"] == "MOT17":
                 imgs, infos = self.transform["MOT17"](imgs, infos)
@@ -163,6 +165,7 @@ class MOT17_COCO(MOTDataset):
             # "sentence": begin_sentence,
             "infos": infos,
             # "ori_imgs": ori_imgs
+            "sentence": begin_sentence
         }
 
     def set_epoch(self, epoch: int):
@@ -190,16 +193,16 @@ class MOT17_COCO(MOTDataset):
                 t_max = max(map(int,dataset[vid].keys()))
                 self.sample_vid_tmax[vid] = t_max
                 for t in range(t_min, t_max - (self.sample_length - 1) + 1):
-                    # for sen in list(self.mot17_gts[vid][t].keys()):
-                    #     sample=defaultdict()
-                    #     sample["path"] = os.path.join(self.mot17_seqs_dir, vid, "img1", str(t).zfill(6) + ".jpg")
-                    #     sample["sentence"] = sen
-                    #     self.sample_begin_frame_paths.append(
-                    #        sample
-                    #     )
-                    self.sample_begin_frame_paths.append(
-                        os.path.join(self.mot17_seqs_dir, vid, "img1", str(t).zfill(6) + ".jpg")
-                    )
+                    for sen in list(self.mot17_gts[vid][t].keys()):
+                        sample=defaultdict()
+                        sample["path"] = os.path.join(self.mot17_seqs_dir, vid, "img1", str(t).zfill(6) + ".jpg")
+                        sample["sentence"] = sen
+                        self.sample_begin_frame_paths.append(
+                           sample
+                        )
+                    # self.sample_begin_frame_paths.append(
+                    #     os.path.join(self.mot17_seqs_dir, vid, "img1", str(t).zfill(6) + ".jpg")
+                    # )
                 
         if self.use_motsynth:
             multi_random_state = random.getstate()
@@ -239,7 +242,7 @@ class MOT17_COCO(MOTDataset):
         else:
             raise NotImplementedError(f"Do not support sample mode '{self.sample_mode}'.")
 
-    def get_single_frame(self, frame_path: str):
+    def get_single_frame(self, frame_path: str,sentence:str=None):
         if "CrowdHuman" in frame_path:
             frame_name = frame_path.split(self.spliter)[-1].split(".")[0]
             gt = self.crowdhuman_gts[frame_name]
@@ -251,7 +254,7 @@ class MOT17_COCO(MOTDataset):
             else:
                 # gt = self.mot17_gts[vid][frame_idx][sentence]
 
-                gt = self.mot17_gts_train[vid][frame_idx] if self.split == "train" else  self.mot17_gts_val[vid][frame_idx]
+                gt = self.mot17_gts_train[vid][frame_idx][sentence] if self.split == "train" else  self.mot17_gts_val[vid][frame_idx][sentence]
         else:
             raise RuntimeError(f"Frame path '{frame_path}' has no GTs.")
         img = Image.open(frame_path)
@@ -264,16 +267,16 @@ class MOT17_COCO(MOTDataset):
         info["ids"] = list()
         info["labels"] = list()
         info["areas"] = list()
-        info["sentences"] = list()
+        # info["sentences"] = list()
         info["dataset"] = "MOT17" if ("MOT17" in frame_path or "MOTSynth" in frame_path) else "CrowdHuman"
 
-        for sen in gt:
-            for i, x, y, w, h in gt[sen]:
-                info["boxes"].append(list(map(float, (x, y, w, h))))
-                info["areas"].append(w * h)
-                info["ids"].append(i if "MOT17" in frame_path else i + crowdhuman_ids_offset)
-                info["labels"].append(0)
-                info["sentences"].append(sen)
+        # for sen in gt:
+        #     for i, x, y, w, h in gt[sen]:
+        #         info["boxes"].append(list(map(float, (x, y, w, h))))
+        #         info["areas"].append(w * h)
+        #         info["ids"].append(i if "MOT17" in frame_path else i + crowdhuman_ids_offset)
+        #         info["labels"].append(0)
+        #         info["sentences"].append(sen)
         info["boxes"] = torch.as_tensor(info["boxes"])
         info["areas"] = torch.as_tensor(info["areas"])
         info["ids"] = torch.as_tensor(info["ids"], dtype=torch.long)
@@ -288,8 +291,8 @@ class MOT17_COCO(MOTDataset):
         info['frame_path'] = frame_path
         return img, info
 
-    def get_multi_frames(self, frame_paths: list[str]):
-        return zip(*[self.get_single_frame(frame_path=path) for path in frame_paths ])
+    def get_multi_frames(self, frame_paths: list[str], sentence: str = None):
+        return zip(*[self.get_single_frame(frame_path=path,sentence=sentence) for path in frame_paths ])
 
 
 def transforms_for_train(coco_size: bool = False, overflow_bbox: bool = False, reverse_clip: bool = False):
