@@ -64,9 +64,9 @@ def train(config: dict):
     optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
     wandb.init(
       # Set the project where this run will be logged
-      project="Model6", 
+      project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model6", 
+      name=f"experiment_model6-1", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
