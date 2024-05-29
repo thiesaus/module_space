@@ -178,7 +178,7 @@ class Model4(nn.Module):
         all_logits=[]
         for i,quantity in enumerate(quantities):
             ff=full_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else full_feat[i*quantity:]
-            lf=local_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else local_feat[i*quantity:]
+            lf=text_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else text_feat[i*quantity:]
             logits=[]
             
             for fs_f in ff:
