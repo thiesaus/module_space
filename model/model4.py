@@ -61,8 +61,10 @@ class FusionBlock(nn.Module):
         self.text_dim = text_dim    
         local_reso = 16* 16
         local_scale = local_reso ** -0.5
-        self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
-        self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        # self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        # self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        self.linear1 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
+        self.linear2 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
@@ -70,8 +72,8 @@ class FusionBlock(nn.Module):
         ).to(self.device).requires_grad_()
     
     def forward(self, query, key,is_add=False,is_mul=False):
-        _query = query +self.emb
-        _key = key +self.emb2
+        _query = self.linear1(query) 
+        _key = self.linear1(key) 
         fusion_feat = self.fusion(
             query=_query,
             key=_key,
@@ -149,7 +151,10 @@ class Model4(nn.Module):
 
  
         self.logit_scale = nn.Parameter(torch.tensor(10.0),requires_grad=True).to(self.device)
-
+        local_reso = 16* 16
+        local_scale = local_reso ** -0.5
+        self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
     
     def forward(self, x):
         batch_feats=[self.processing_input(i) for i in x] # arr([{"local_images":PIL.Image[n],"global_images":1,"sentences":str[m]}])
@@ -161,7 +166,7 @@ class Model4(nn.Module):
         #fusion local_global
         _local_feat=norm_feats["local_images"].requires_grad_()
         # _global_feat=norm_feats["global_images"].requires_grad_()
-        text_feat=norm_feats["sentences"].requires_grad_()
+        text_feat=norm_feats["sentences"].requires_grad_() + self.emb
 
         _local_feat=rearrange(_local_feat,"b (h w) c -> b c h w",h=8)
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
@@ -169,7 +174,7 @@ class Model4(nn.Module):
         local_feat=self.cnn_image(_local_feat)
         # global_feat=self.cnn_image(_global_feat)
 
-        local_feat=rearrange(local_feat,"b c h w -> b (h w c)")
+        local_feat=rearrange(local_feat,"b c h w -> b (h w c)") + self.emb2
         # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
         full_feat=None
         for block in self.supa_layer:
