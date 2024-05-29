@@ -277,6 +277,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
+        aa_loss=loss.item()
         loss = loss / accumulation_steps
         loss.backward()
 
@@ -299,7 +300,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
             second_per_iter = metric_log.metrics["time per iter"].avg
-            wandb.log({ "total":{"epoch":epoch,"iter":i,"loss":loss.item(),"sec":second_per_iter} })
+            wandb.log({ "total":{"epoch":epoch,"iter":i,"loss":aa_loss,"sec":second_per_iter} })
             logger.show(head=f"[Epoch={epoch}, Iter={i}, "
                             f"{second_per_iter:.2f}s/iter, "
                             f"{i}/{dataloader_len} iters, "
