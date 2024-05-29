@@ -144,7 +144,7 @@ class Model4(nn.Module):
         self.text_linear6 = nn.Linear(1024, 512).to(self.device).requires_grad_()
         self.text_linear7 = nn.Linear(512, 256).to(self.device).requires_grad_()
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=8
+        self.numlayers=12
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
  
