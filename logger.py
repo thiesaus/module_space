@@ -100,7 +100,12 @@ class MetricLog:
         return s
     def total_loss(self):
         return f"loss = {self.metrics['total_loss'].avg:.4f} "
+    
+    def get_avg(self):
+        return self.metrics["total_loss"].avg
 
+    def get_global_avg(self):
+        return self.metrics["total_loss"].global_avg
 
 def merge_dicts(dicts: List[dict]) -> dict:
     merged = dict()
