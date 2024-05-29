@@ -259,13 +259,13 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
 
     for i, batch in enumerate(dataloader):
         datas=convert_data(batch)
-        # run=True
-        # for data in datas:
-        #     if len(data["local_images"])==0:
-        #         run=False
-        #         break
-        # if not run:
-        #     continue
+        run=True
+        for data in datas:
+            if len(data["local_images"])==0:
+                run=False
+                break
+        if not run:
+            continue
         iter_start_timestamp = time.time()
 
         model_outputs= model(datas)
