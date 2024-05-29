@@ -81,6 +81,7 @@ def convert_data(temp):
         bboxes= output_dict["boxes"]
         output_dict["local_images"]=[img.crop(box.numpy()) for box in bboxes]
         output_dict["global_image"]=img 
+        output_dict["sentences"]=temp["sentence"]
         output.append(output_dict)
     return output
 

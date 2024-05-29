@@ -36,10 +36,10 @@ def train(config: dict):
     dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
                                         batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
     
-    dataset_test = build_dataset(config=config, split="test")
-    sampler_test = build_sampler(dataset=dataset_test, shuffle=True)
-    dataloader_test = build_dataloader(dataset=dataset_test, sampler=sampler_test,
-                                        batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
+    # dataset_test = build_dataset(config=config, split="test")
+    # sampler_test = build_sampler(dataset=dataset_test, shuffle=True)
+    # dataloader_test = build_dataloader(dataset=dataset_test, sampler=sampler_test,
+    #                                     batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
 
     
     if config['GET_DATA_SUBSET'] is True and config['SUBSET_LENGTH'] > 0:
@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model9_8layer", 
+      name=f"experiment_model10_12layer_dataloader", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -259,13 +259,13 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
 
     for i, batch in enumerate(dataloader):
         datas=convert_data(batch)
-        run=True
-        for data in datas:
-            if len(data["local_images"])==0:
-                run=False
-                break
-        if not run:
-            continue
+        # run=True
+        # for data in datas:
+        #     if len(data["local_images"])==0:
+        #         run=False
+        #         break
+        # if not run:
+        #     continue
         iter_start_timestamp = time.time()
 
         model_outputs= model(datas)

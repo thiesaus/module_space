@@ -283,12 +283,12 @@ class Model4(nn.Module):
         # global_image = x["global_image"]
         # global_image = self.process_image(global_image)
         # global_image = global_image / global_image.norm(dim=-1, keepdim=True)
-        # global_image = global_image.repeat(len(x["local_images"]),1,1)
+        sentences = [x["sentences"][0] for _ in range(len(x["local_images"]))]
         
         processed={
             "local_images": self.process_image(x["local_images"]),
             # "global_images":torch.vstack([ self.preprocess(x["global_image"]) for _ in x["local_images"]]).view(-1,3,224,224).to(self.device),
-            "sentences":self.process_text(x["sentences"])
+            "sentences":self.process_text( sentences)
         }
 
         feats={
