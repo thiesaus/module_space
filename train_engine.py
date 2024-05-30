@@ -281,10 +281,10 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         loss.backward()
 
         if (i + 1) % accumulation_steps == 0:
-            if max_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
-            else:
-                pass
+            # if max_norm > 0:
+            #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+            # else:
+            #     pass
             optimizer.step()
             optimizer.zero_grad()
 
