@@ -119,6 +119,11 @@ class ZicZacBlock(nn.Module):
         self.layer2= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
         self.layer3= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
         self.layer4= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.fusion = nn.MultiheadAttention(
+        embed_dim=self.img_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device).requires_grad_()
         self.is_last=is_last
 
     def forward(self, one, two):
@@ -134,6 +139,8 @@ class ZicZacBlock(nn.Module):
 
         fusion_3=self.layer3(fusion_1, fusion_1,fusion_2,is_mul=self.is_last)
         fusion_4=self.layer4(fusion_2, fusion_2,fusion_1,is_mul=self.is_last)
+        if self.is_last:
+            return self.fusion(fusion_3, fusion_4, fusion_4)[0],None
         return fusion_3,fusion_4
        
 
@@ -205,9 +212,11 @@ class Model4(nn.Module):
         local_feat=rearrange(local_feat,"b c h w -> b (h w c)") + self.emb2
         # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
         full_feat=None
+        local_feat_1= local_feat
+        text_feat_1= text_feat
         for block in self.supa_layer:
-            local_feat,text_feat, full_feat = block(local_feat,text_feat ,full_feat)
-
+            local_feat_1,text_feat_1 = block(local_feat_1,text_feat_1 ,full_feat)
+        full_feat=local_feat_1
         all_logits=[]
         for i,quantity in enumerate(quantities):
             ff=full_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else full_feat[i*quantity:]
