@@ -85,7 +85,7 @@ class FusionBlock(nn.Module):
         num_heads=num_heads,
         dropout=0.,
         ).to(self.device).requires_grad_()
-        self.ffw = FeedForwardBlock(self.img_dim, self.img_dim).to(self.device)
+        # self.ffw = FeedForwardBlock(self.img_dim, self.img_dim).to(self.device)
     
     def forward(self, query, key,is_add=False,is_mul=False):
         _query = self.linear1(query) 
@@ -95,7 +95,8 @@ class FusionBlock(nn.Module):
             key=_key,
             value=_key
         )
-        fusion_feat2 = self.ffw(fusion_feat[0])
+        # fusion_feat2 = self.ffw(fusion_feat[0])
+        fusion_feat2 = fusion_feat[0]
         if is_add:
             return fusion_feat2.add(query)
         if is_mul:
