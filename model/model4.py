@@ -183,7 +183,7 @@ class Model4(nn.Module):
         #fusion local_global
         _local_feat=norm_feats["local_images"].requires_grad_()
         # _global_feat=norm_feats["global_images"].requires_grad_()
-        text_feat=norm_feats["sentences"].requires_grad_() + self.emb
+        text_feat=norm_feats["sentences"].requires_grad_() 
 
         _local_feat=rearrange(_local_feat,"b (h w) c -> b c h w",h=8)
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
@@ -191,11 +191,13 @@ class Model4(nn.Module):
         local_feat=self.cnn_image(_local_feat)
         # global_feat=self.cnn_image(_global_feat)
 
-        local_feat=rearrange(local_feat,"b c h w -> b (h w c)") + self.emb2
+        local_feat=rearrange(local_feat,"b c h w -> b (h w c)")
         # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
         full_feat=None
+        local_feat_1=local_feat + self.emb
+        text_feat_1=local_feat + self.emb2
         for block in self.supa_layer:
-            local_feat,text_feat, full_feat = block(local_feat,text_feat ,full_feat)
+            local_feat_1,text_feat_1, full_feat = block(local_feat_1,text_feat_1 ,full_feat)
 
         all_logits=[]
         for i,quantity in enumerate(quantities):
