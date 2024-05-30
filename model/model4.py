@@ -215,7 +215,7 @@ class Model4(nn.Module):
         local_feat_1= local_feat
         text_feat_1= text_feat
         for block in self.supa_layer:
-            local_feat_1,text_feat_1 = block(local_feat_1,text_feat_1 ,full_feat)
+            local_feat_1,text_feat_1 = block(local_feat_1,text_feat_1)
         full_feat=local_feat_1
         all_logits=[]
         for i,quantity in enumerate(quantities):
