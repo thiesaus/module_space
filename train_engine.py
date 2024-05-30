@@ -12,7 +12,7 @@ from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
 from model.model4 import Model4,build_model4
 from torch.utils.data import DataLoader
-from utils.utils import convert_data
+from utils.utils import convert_data ,plot_grad_flow
 from model.criterion import ModuleCriterion,build_criterion
 from eval_engine import eval_model
 from utils.train_visualize import Visualize
@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model12_12layer_supanew", 
+      name=f"experiment_model12_12layer_adjust", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -279,7 +279,7 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
         metric_log.update(name="total_loss", value=loss.item())
         loss = loss / accumulation_steps
         loss.backward()
-
+        # plot_grad_flow(model.named_parameters())
         if (i + 1) % accumulation_steps == 0:
             # if max_norm > 0:
             #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)

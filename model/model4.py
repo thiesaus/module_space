@@ -148,8 +148,8 @@ def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
     blocks = []
     for i in range(repeat_times):
         blocks += [ZicZacBlock(img_dim, text_dim,device=device), ]
-    blocks+=[ZicZacBlock(img_dim, text_dim,is_last=True,device=device)]
-    return blocks
+    blocks+=[ZicZacBlock(img_dim, text_dim,is_last=True,device=device),]
+    return nn.Sequential(*blocks)
 
 class Model4(nn.Module):
     def __init__(self, ):
