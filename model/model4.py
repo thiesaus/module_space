@@ -80,9 +80,9 @@ class FusionBlock(nn.Module):
             value=_key
         )
         if is_add:
-            return fusion_feat[0] + query
+            return F.relu( fusion_feat[0].add(query),True)
         if is_mul:
-            return fusion_feat[0] * query
+            return F.relu(fusion_feat[0].mul(query),True)
 
 class ZicZacBlock(nn.Module):
     def __init__(self,img_dim, text_dim,num_heads=4,is_last=False,device="cuda"):
