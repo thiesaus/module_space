@@ -226,8 +226,8 @@ class Model4(nn.Module):
             for fs_f in ff:
                 logit=[]
                 for text_f in lf:
-                    # logit.append(F.cosine_similarity(fs_f, text_f,dim=-1).item())
-                    logit.append(self.logit_scale.exp() * fs_f @ text_f)
+                    logit.append((self.logit_scale.exp()*F.cosine_similarity(fs_f, text_f,dim=-1)).item())
+                    # logit.append(self.logit_scale.exp() * fs_f @ text_f)
                 logits.append(logit)
             all_logits.append( torch.tensor(logits,device=self.device))
 

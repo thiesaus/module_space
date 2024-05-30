@@ -16,6 +16,7 @@ if __name__ == "__main__":
     config["TRAIN_COCO"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\outputs\\memotr_mot17_coco\\train\\mot17_train_coco_reforged.json"
     config["NO_TRANSFORM"]=True
     config["EPOCHS"]=10
+    # config["RESUME"]="D:\\Thesis\\DamnShit\\module_space\\checkpoint_9.pth"
     # config["SUBSET_LENGTH"]=0.2
     # config["GET_DATA_SUBSET"]=True
     # dataset_train = build_dataset(config=config, split="train")

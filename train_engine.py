@@ -66,7 +66,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model12_12layer_new", 
+      name=f"experiment_model12_12layer_supanew", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",

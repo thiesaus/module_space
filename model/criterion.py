@@ -28,6 +28,7 @@ class ModuleCriterion:
         self.loss = {}
         self.log = {}
         self.n_logits=[]
+        self.cross= nn.CrossEntropyLoss()
 
     def set_device(self, device: torch.device):
         self.device = device
@@ -116,21 +117,26 @@ class ModuleCriterion:
         loss =  nn.L1Loss()(logits, target)
         return loss
 
-    @staticmethod
-    def get_cross_image_text_loss(outputs):
+    # @staticmethod
+    def get_cross_image_text_loss(self,outputs):
         """
         Computer the bounding box loss, l1 and giou.
         """
         logits=outputs 
-      
-        loss= nn.CrossEntropyLoss()(logits, torch.arange(logits.shape[0],device=logits.device))
+        shape = logits.shape
+        target= torch.ones(shape[0],shape[1],dtype=torch.float32).to(outputs.device)
+        loss= self.cross(logits, target)
+        # loss= self.cross(logits, torch.arange(logits.shape[0],device=logits.device))
         return loss
     
     
-    @staticmethod
-    def get_cross_text_image_loss(outputs):
+    # @staticmethod
+    def get_cross_text_image_loss(self,outputs):
         logits=outputs.t() 
-        loss= nn.CrossEntropyLoss()(logits, torch.arange(logits.shape[0],device=logits.device))
+        shape = logits.shape
+        target= torch.ones(shape[0],shape[1],dtype=torch.float32).to(outputs.device)
+        loss= self.cross(logits, target)
+        # loss= self.cross(logits, torch.arange(logits.shape[0],device=logits.device))
         return loss
 
 
