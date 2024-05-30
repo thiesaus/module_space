@@ -80,26 +80,34 @@ class FusionBlock(nn.Module):
         # self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
         self.linear1 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
         self.linear2 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
+        self.linear3 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
         dropout=0.,
         ).to(self.device).requires_grad_()
-        self.ffw = FeedForwardBlock(self.img_dim, self.img_dim).to(self.device)
+        self.self_attn = nn.MultiheadAttention(
+        embed_dim=self.img_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device).requires_grad_()
     
-    def forward(self, query, key,is_add=False,is_mul=False):
+    def forward(self, query, key,value,is_mul=False):
         _query = self.linear1(query) 
-        _key = self.linear1(key) 
+        _key = self.linear2(key) 
+        _value = self.linear3(value)
         fusion_feat = self.fusion(
             query=_query,
             key=_key,
-            value=_key
+            value=_value
         )
-        fusion_feat2 = self.ffw(fusion_feat[0])
-        if is_add:
-            return fusion_feat2.add(query)
+        fusion_feat2 = fusion_feat[0]
+        fusion_feat3= self.self_attn(fusion_feat2, fusion_feat2, fusion_feat2)[0]
+
         if is_mul:
-            return fusion_feat2.mul(query)
+            return fusion_feat3.mul(query)
+        else:
+            return fusion_feat3.add(query)
 
 class ZicZacBlock(nn.Module):
     def __init__(self,img_dim, text_dim,num_heads=4,is_last=False,device="cuda"):
@@ -107,23 +115,26 @@ class ZicZacBlock(nn.Module):
         self.device=device
         self.img_dim = img_dim
         self.text_dim = text_dim    
-        self.text_local= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
-        self.local_text= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.layer1= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.layer2= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.layer3= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
+        self.layer4= FusionBlock(self.img_dim, self.text_dim, num_heads,device=self.device)
         self.is_last=is_last
 
-    def forward(self, query, key,res=None):
-        if res is not None:
-            fusion_1_1=self.text_local(query, res,is_add=True)
-            if self.is_last:
-                return query,key,self.local_text(key, fusion_1_1,is_mul=True)
-            fusion_1_2=self.local_text(key, fusion_1_1,is_add=True)
-            return query,key, fusion_1_2
+    def forward(self, one, two):
+        # if res is not None:
+        #     fusion_1_1=self.layer1(query, res,is_add=True)
+        #     if self.is_last:
+        #         return query,key,self.layer2(key, fusion_1_1,is_mul=True)
+        #     fusion_1_2=self.layer2(key, fusion_1_1,is_add=True)
+        #     return query,key, fusion_1_2
         
-        fusion_1_1=self.text_local(query, key,is_add=True)
-        if self.is_last:
-            return query,key, self.local_text(key, fusion_1_1,is_mul=True)
-        fusion_1_2=self.local_text(key, fusion_1_1,is_add=True)
-        return query,key, fusion_1_2
+        fusion_1=self.layer1(one, two,one,is_mul=self.is_last)
+        fusion_2=self.layer2(two,one,two,is_mul=self.is_last)
+
+        fusion_3=self.layer3(fusion_1, fusion_1,fusion_2,is_mul=self.is_last)
+        fusion_4=self.layer4(fusion_2, fusion_2,fusion_1,is_mul=self.is_last)
+        return fusion_3,fusion_4
        
 
 def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
