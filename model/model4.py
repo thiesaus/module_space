@@ -53,6 +53,21 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
             blocks += [BasicBlock(c_out, c_out), ]
     return nn.Sequential(*blocks)
 
+class FeedForwardBlock(nn.Module):
+    def __init__(self, dim, hidden_dim):
+        super().__init__()
+        self.ln1 = nn.Linear(dim, hidden_dim).requires_grad_()
+        self.ln2 = nn.Linear(hidden_dim, dim).requires_grad_()
+        self.act = nn.ReLU().requires_grad_()
+        self.norm = nn.LayerNorm(dim).requires_grad_()
+    def forward(self, x):
+        h_res = x
+        x = self.norm(x)
+        x = self.ln1(x)
+        x = self.act(x)
+        x = self.ln2(x)
+        return x + h_res
+
 class FusionBlock(nn.Module):
     def __init__(self,img_dim, text_dim,num_heads=4,device="cuda"):
         super(FusionBlock, self).__init__()
@@ -70,6 +85,7 @@ class FusionBlock(nn.Module):
         num_heads=num_heads,
         dropout=0.,
         ).to(self.device).requires_grad_()
+        self.ffw = FeedForwardBlock(self.img_dim, self.img_dim).to(self.device)
     
     def forward(self, query, key,is_add=False,is_mul=False):
         _query = self.linear1(query) 
@@ -79,10 +95,11 @@ class FusionBlock(nn.Module):
             key=_key,
             value=_key
         )
+        fusion_feat2 = self.ffw(fusion_feat[0])
         if is_add:
-            return F.relu( fusion_feat[0].add(query),True)
+            return fusion_feat2.add(query)
         if is_mul:
-            return F.relu(fusion_feat[0].mul(query),True)
+            return fusion_feat2.mul(query)
 
 class ZicZacBlock(nn.Module):
     def __init__(self,img_dim, text_dim,num_heads=4,is_last=False,device="cuda"):
