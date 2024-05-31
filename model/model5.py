@@ -273,10 +273,12 @@ class Model5(nn.Module):
         # spatial encoding
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
         b=len(local_img)
+        
         local_feat =  self.process_image(local_img);  # [bt,c,7,7]
         local_feat=rearrange(local_feat,"b (h w) c -> b c h w",h=8)
         # bt, c, h, w = local_feat.size()
         global_feat =  self.process_image(global_img); 
+        global_feat = torch.stack([global_feat for _ in range(b)], dim=1).squeeze(0)
         global_feat=rearrange(global_feat,"b (h w) c -> b c h w",h=8)
 
         # global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
