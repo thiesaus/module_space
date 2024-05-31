@@ -19,7 +19,7 @@ from eval_engine import eval_model
 from utils.train_visualize import Visualize
 import wandb
 from model.loss import SimilarityLoss
-
+from data.dataloader import get_dataloader
 sim_loss = SimilarityLoss(
     rho=None,
     gamma=2.0,
@@ -41,10 +41,12 @@ def train(config: dict):
     # Load Pretrained Model
  
     # Data process
-    dataset_train = build_dataset(config=config, split="train")
-    sampler_train = build_sampler(dataset=dataset_train, shuffle=True)
-    dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
-                                        batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
+    dataloader_train = get_dataloader('train', config, 'RMOT_Dataset', show=True)
+    dataloader_test = get_dataloader('test', config, 'RMOT_Dataset', show=False)
+    # dataset_train = build_dataset(config=config, split="train")
+    # sampler_train = build_sampler(dataset=dataset_train, shuffle=True)
+    # dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
+    #                                     batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
     
     # dataset_test = build_dataset(config=config, split="test")
     # sampler_test = build_sampler(dataset=dataset_test, shuffle=True)
@@ -52,17 +54,17 @@ def train(config: dict):
     #                                     batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
 
     
-    if config['GET_DATA_SUBSET'] is True and config['SUBSET_LENGTH'] > 0:
-        print("Running on subset of first {} data samples.".format(config['SUBSET_LENGTH']))
-        from torch.utils.data.sampler import SubsetRandomSampler
-        dataset_size = len(dataset_train)
-        indices = list(range(dataset_size))
-        split =  int(np.floor(config['SUBSET_LENGTH'] * dataset_size))
-        train_indices = indices[:split]
-        val_indices = indices[split:]
-        sampler_train = SubsetRandomSampler(train_indices)
-        dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
-                                            batch_size=config["BATCH_SIZE"],num_workers=config["NUM_WORKERS"])
+    # if config['GET_DATA_SUBSET'] is True and config['SUBSET_LENGTH'] > 0:
+    #     print("Running on subset of first {} data samples.".format(config['SUBSET_LENGTH']))
+    #     from torch.utils.data.sampler import SubsetRandomSampler
+    #     dataset_size = len(dataset_train)
+    #     indices = list(range(dataset_size))
+    #     split =  int(np.floor(config['SUBSET_LENGTH'] * dataset_size))
+    #     train_indices = indices[:split]
+    #     val_indices = indices[split:]
+    #     sampler_train = SubsetRandomSampler(train_indices)
+    #     dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
+    #                                         batch_size=config["BATCH_SIZE"],num_workers=config["NUM_WORKERS"])
 
 
     # Criterion
@@ -76,7 +78,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"model13_ikun", 
+      name=f"mode101_ikun", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -126,9 +128,9 @@ def train(config: dict):
     # eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=0)
 
     for epoch in range(start_epoch, config["EPOCHS"]):
-        if is_distributed():
-            sampler_train.set_epoch(epoch)
-        dataset_train.set_epoch(epoch)
+        # if is_distributed():
+        #     sampler_train.set_epoch(epoch)
+        # dataset_train.set_epoch(epoch)
 
         # sampler_train = build_sampler(dataset=dataset_train, shuffle=True)
         # dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
@@ -260,45 +262,54 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         Logs
     """
     model.train()
-    optimizer.zero_grad()
     device = next(get_model(model).parameters()).device
 
     dataloader_len=len(dataloader)
     metric_log = MetricLog()
     epoch_start_timestamp = time.time()
 
-    for i, batch in enumerate(dataloader):
-        datas=convert_data(batch)
-        run=True
-        for data in datas:
-            if len(data["local_images"])==0:
-                run=False
-                break
-        if not run:
-            continue
+    for i, data in enumerate(dataloader):
+        # datas=convert_data(batch)
+        # run=True
+        # for data in datas:
+        #     if len(data["local_images"])==0:
+        #         run=False
+        #         break
+        # if not run:
+        #     continue
+        expression = data['target_expressions']
+        expression_ids = data['expression_id'].to(device)
+        # forward
+        inputs = dict(
+            local_images=data['cropped_images'].to(device),
+            global_image=data['global_images'].to(device),
+            sentences=expression,
+        )
         iter_start_timestamp = time.time()
 
-        model_outputs= model(datas[0])
+        model_outputs= model(inputs)
     
         # criterion.init_module(device=device)
         # criterion.process(model_outputs=model_outputs,batch_idx=i)
         # loss_dict,log_dict=criterion.get_loss_and_log()
         logits = model_outputs['logits']
-        targets = torch.tensor([1 for _ in range(len(logits))],device=logits.device).float()
+        targets = data['target_labels'].view(-1).to(logits.device)
         loss =sim_loss(logits, targets)
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
         # loss = loss / accumulation_steps
+        optimizer.zero_grad()
         loss.backward()
+        optimizer.step()
         # plot_grad_flow(model.named_parameters())
-        if (i + 1) % accumulation_steps == 0:
-            # if max_norm > 0:
-            #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
-            # else:
-            #     pass
-            optimizer.step()
-            optimizer.zero_grad()
+        # if (i + 1) % accumulation_steps == 0:
+        #     # if max_norm > 0:
+        #     #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+        #     # else:
+        #     #     pass
+        #     optimizer.step()
+        #     optimizer.zero_grad()
 
         # # For logging
         # for log_k in log_dict:

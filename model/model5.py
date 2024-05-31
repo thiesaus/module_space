@@ -199,10 +199,18 @@ class Model5(nn.Module):
                     x['local_images'], x['global_image'], textual_feat
                 )
         logits=[]
-        for i in range(visual_feat.shape[0]):
-            temp =visual_feat[i].unsqueeze(0)
-            logits.append(F.cosine_similarity(temp, textual_hidden))
-
+        b= x['local_images'].shape[0]
+        visual_feat = rearrange(visual_feat,'(b t) c -> b t c',b=b)
+        for i in range(textual_hidden.shape[0]):
+            temp =visual_feat[i]
+            textual =textual_hidden[i]
+            temp_logit=torch.zeros(1,device=self.device,requires_grad=True)
+            for j in range(temp.shape[0]):
+                temp_feat=temp[j]
+                temp_logit = temp_logit + F.cosine_similarity(temp_feat, textual,dim=-1)
+            
+            logits.append(temp_logit/2)
+            
 
         output['logits'] = torch.tensor(logits, device=self.device, requires_grad=True)
         output['vis_feat'] = visual_feat
@@ -222,12 +230,12 @@ class Model5(nn.Module):
         feat = self.img_fc(feat)
         return feat
 
-    def cross_modal_fusion(self, vis_feat, text_feat, b):
+    def cross_modal_fusion(self, vis_feat, text_feat, b,t):
         # if mode == 'cascade attention':
         assert len(text_feat.size()) == 3
         # get textual embeddings
         text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
-        text_feat = text_feat.repeat([1, b, 1, 1])
+        text_feat = text_feat.repeat([1, t, 1, 1])
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
         text_feat = self.fusion_fc(text_feat)
         text_feat = rearrange(text_feat, 'bt l c -> l bt c')
@@ -272,21 +280,25 @@ class Model5(nn.Module):
         # b, t = global_img.size()[:2]
         # spatial encoding
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
-        b=len(local_img)
-        
+        b, t = global_img.size()[:2]
+        local_img = rearrange(local_img, 'b t c h w -> (b t) c h w')
+        local_img=(local_img-  local_img.min())/ (local_img.max() - local_img.min())
         local_feat =  self.process_image(local_img);  # [bt,c,7,7]
-        local_feat=rearrange(local_feat,"b (h w) c -> b c h w",h=8)
+        # local_feat=rearrange(local_feat,"b (h w) c -> b c h w",h=8)
         # bt, c, h, w = local_feat.size()
+        global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
+        global_img=(global_img-  global_img.min())/ (global_img.max() - global_img.min())
+
         global_feat =  self.process_image(global_img); 
-        global_feat = torch.stack([global_feat for _ in range(b)], dim=1).squeeze(0)
-        global_feat=rearrange(global_feat,"b (h w) c -> b c h w",h=8)
+        # global_feat = torch.stack([global_feat for _ in range(b)], dim=1).squeeze(0)
+        # global_feat=rearrange(global_feat,"b (h w) c -> b c h w",h=8)
 
         # global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
         # global_feat = self.clip.visual(global_img, with_pooling=False)  # [bt,c,7,7]
-        bt, c, H, W = global_feat.size()
+        # bt, c, H, W = global_feat.size()
         # rearrange
-        local_feat = rearrange(local_feat, 'bt c h w -> bt c (h w)')
-        global_feat = rearrange(global_feat, 'bt c H W -> bt c (H W)')
+        local_feat = rearrange(local_feat, 'bt hw c -> bt c hw')
+        global_feat = rearrange(global_feat, 'bt HW c -> bt c HW')
         local_feat = local_feat + self.pos_emb_local
         global_feat = global_feat + self.pos_emb_global
         local_feat = rearrange(local_feat, 'bt c hw -> hw bt c')
@@ -315,7 +327,7 @@ class Model5(nn.Module):
         # text-guided
         # if kum_mode in ('cascade attention', 'cross correlation'):
         fusion_feat= self.cross_modal_fusion(
-            fusion_feat, text_feat, b
+            fusion_feat, text_feat, b,t
         )
         # else:
         #     fusion_feat = rearrange(fusion_feat, 'HW bt c -> bt c HW')
@@ -384,8 +396,8 @@ class Model5(nn.Module):
         return padded_temp
     
     def image_encoder(self, image): # [1,49,768]
-        inputs = self.image_processor(image, return_tensors="pt").to(self.device)
-        outputs = self.swinv2_model(**inputs)
+        inputs = self.image_processor(image, return_tensors="pt",).to(self.device)
+        outputs = self.swinv2_model(**inputs,do_rescale=False)
         last_hidden_states = outputs.last_hidden_state
         return last_hidden_states 
     

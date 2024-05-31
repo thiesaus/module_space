@@ -16,6 +16,25 @@ if __name__ == "__main__":
     config["TRAIN_COCO"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\outputs\\memotr_mot17_coco\\train\\mot17_train_coco_reforged.json"
     config["NO_TRANSFORM"]=True
     config["EPOCHS"]=10
+    # ik
+    config["train_bs"]=8
+    config["test_bs"]=1
+    config["num_workers"]=4
+    config["img_hw"]=[(224, 224), (448, 448), (672, 672)]
+    config["random_crop_ratio"]=[0.8, 1.0]
+    config["norm_mean"]=[0.48145466, 0.4578275, 0.40821073]
+    config["norm_std"]=[0.26862954, 0.26130258, 0.27577711]
+    config["rf_kitti_json"]="C:\\Users\\phamp\\Desktop\\module_space\\outputs\\Refer-KITTI_labels.json"
+    config["rf_expression"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR\\Refer_Kitti\\expression"
+    config["sample_frame_len"]=8
+    config["sample_frame_num"]=2
+    config["data_root"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR\\Refer_Kitti"
+    config["sample_expression_num"]=1
+    config["sample_frame_stride"]=4
+    config["track_root"]=""
+
+
+
     # config["RESUME"]="D:\\Thesis\\DamnShit\\module_space\\checkpoint_9.pth"
     # config["SUBSET_LENGTH"]=0.2
     # config["GET_DATA_SUBSET"]=True
