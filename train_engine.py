@@ -173,7 +173,7 @@ def train(config: dict):
             multi_checkpoint=multi_checkpoint,
         )
         scheduler.step()
-        test_one_epoch(model=model,dataloader_test=dataloader_test,opt=config,epoch=epoch)
+        test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
         train_states["start_epoch"] += 1
         if multi_checkpoint is True:
             pass
@@ -357,7 +357,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
 
     return
 
-def test_one_epoch(model:Model5,dataloader_test: DataLoader,opt,epoch):
+def test_one_epoch(model:Model5,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()
     if (epoch + 1) % 1 == 0:
         p, r = test_accuracy(model, dataloader_test)

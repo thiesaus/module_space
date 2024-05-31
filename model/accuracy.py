@@ -12,7 +12,7 @@ from torch import nn
 import torch.nn.functional as F
 from torchvision.utils import save_image
 
-def test_accuracy(model, opt,dataloader, save_img=False):
+def test_accuracy(model,dataloader, save_img=False):
     model.eval()
     TP, FP, FN = 0, 0, 0
     assert dataloader.batch_size == 1
