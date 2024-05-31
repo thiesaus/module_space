@@ -397,7 +397,7 @@ class Model5(nn.Module):
     
     def image_encoder(self, image): # [1,49,768]
         inputs = self.image_processor(image, return_tensors="pt",).to(self.device)
-        outputs = self.swinv2_model(**inputs,do_rescale=False)
+        outputs = self.swinv2_model(**inputs)
         last_hidden_states = outputs.last_hidden_state
         return last_hidden_states 
     
