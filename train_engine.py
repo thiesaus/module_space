@@ -19,6 +19,7 @@ from eval_engine import eval_model
 from utils.train_visualize import Visualize
 import wandb
 from model.loss import SimilarityLoss
+from model.accuracy import test_accuracy
 from data.dataloader import get_dataloader
 sim_loss = SimilarityLoss(
     rho=None,
@@ -172,6 +173,7 @@ def train(config: dict):
             multi_checkpoint=multi_checkpoint,
         )
         scheduler.step()
+        test_one_epoch(model=model,dataloader_test=dataloader_test,opt=config,epoch=epoch)
         train_states["start_epoch"] += 1
         if multi_checkpoint is True:
             pass
@@ -302,7 +304,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        wandb.log({ "epoch":epoch,"iter":i,"loss":loss.item() })
+        wandb.log({"train":{ "epoch":epoch,"iter":i,"loss":loss.item() }})
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
@@ -354,3 +356,20 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
     logger.tb_add_metric_log(log=metric_log, steps=epoch, mode="epochs")
 
     return
+
+def test_one_epoch(model:Model5,dataloader_test: DataLoader,opt,epoch):
+    torch.cuda.empty_cache()
+    if (epoch + 1) % 1 == 0:
+        p, r = test_accuracy(model, dataloader_test)
+        log_info = 'precision: {:.2f}% / recall: {:.2f}%'.format(p, r)
+        wandb.log({"test":{ "epoch":epoch,"precision":p,"recall":r }})
+
+        print(log_info)
+    # if (epoch + 1) % opt.save_frequency == 0:
+    #     state_dict = {
+    #         'model': model.state_dict(),
+    #         'optimizer': optimizer,
+    #         'epoch': epoch,
+    #     }
+    #     torch.save(state_dict, join(opt.save_dir, f'epoch{epoch}.pth'))
+    torch.cuda.empty_cache()
