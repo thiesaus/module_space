@@ -302,6 +302,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        wandb.log({ "epoch":epoch,"iter":i,"loss":loss.item() })
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
@@ -317,12 +318,12 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         iter_end_timestamp = time.time()
         metric_log.update(name="time per iter", value=iter_end_timestamp-iter_start_timestamp)
         # Outputs logs
-        if i % 100 == 0:
+        if i % 10 == 0:
             metric_log.sync()
             max_memory = max([torch.cuda.max_memory_allocated(torch.device('cuda', i))
                             for i in range(distributed_world_size())]) // (1024**2)
             second_per_iter = metric_log.metrics["time per iter"].avg
-            wandb.log({ "total":{"epoch":epoch,"iter":i,"avg_loss":metric_log.get_avg(),"global_avg_loss":metric_log.get_global_avg(),"sec":second_per_iter} })
+            
             logger.show(head=f"[Epoch={epoch}, Iter={i}, "
                             f"{second_per_iter:.2f}s/iter, "
                             f"{i}/{dataloader_len} iters, "
@@ -334,10 +335,10 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
             logger.tb_add_metric_log(log=metric_log, steps=train_states["global_iters"], mode="iters")
 
         if multi_checkpoint:
-            if i % 100 == 0 and is_main_process():
+            if i % 10 == 0 and is_main_process():
                 save_checkpoint(
                     model=model,
-                    path=os.path.join(logger.logdir[:-5], f"checkpoint_{int(i // 100)}.pth")
+                    path=os.path.join(logger.logdir[:-5], f"checkpoint_{int(i // 10)}.pth")
                 )
 
         train_states["global_iters"] += 1
