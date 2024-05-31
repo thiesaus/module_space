@@ -39,9 +39,9 @@ def test_accuracy(model,dataloader, save_img=False):
             )
             logits = model(inputs)['logits'].cpu()
             # evaluate
-            TP += ((logits >= 0) * (labels == 1)).sum()
-            FP += ((logits >= 0) * (labels == 0)).sum()
-            FN += ((logits < 0) * (labels == 1)).sum()
+            TP += ((logits >= 0) * (labels == 1)).sum().item()
+            FP += ((logits >= 0) * (labels == 0)).sum().item()
+            FN += ((logits < 0) * (labels == 1)).sum().item()
             # save images
             # if save_img:
             #     local_img = data['cropped_images'].squeeze(0)
