@@ -10,13 +10,22 @@ from torch.optim.lr_scheduler import MultiStepLR, CosineAnnealingLR
 import time
 from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
-from model.model4 import Model4,build_model4
+# from model.model4 import Model4,build_model4
+from model.model5 import Model5,build_model5
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
 from model.criterion import ModuleCriterion,build_criterion
 from eval_engine import eval_model
 from utils.train_visualize import Visualize
 import wandb
+from model.loss import SimilarityLoss
+
+sim_loss = SimilarityLoss(
+    rho=None,
+    gamma=2.0,
+    reduction="sum",
+)
+
 
 def train(config: dict):
     train_logger = Logger(logdir=os.path.join( config["OUTPUTS_DIR"], "train"), only_main=True)
@@ -26,7 +35,8 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_model4(config=config)
+    model = build_model5(config=config)
+    
 
     # Load Pretrained Model
  
@@ -66,7 +76,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"experiment_model12_12layer_adjust", 
+      name=f"experiment_model13_ikun", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -225,7 +235,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
+def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
@@ -268,16 +278,18 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
             continue
         iter_start_timestamp = time.time()
 
-        model_outputs= model(datas)
+        model_outputs= model(datas[0])
     
-        criterion.init_module(device=device)
-        criterion.process(model_outputs=model_outputs,batch_idx=i)
-        loss_dict,log_dict=criterion.get_loss_and_log()
-
-        loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
+        # criterion.init_module(device=device)
+        # criterion.process(model_outputs=model_outputs,batch_idx=i)
+        # loss_dict,log_dict=criterion.get_loss_and_log()
+        logits = model_outputs['logits']
+        targets = torch.tensor([1 for _ in range(len(logits))],device=logits.device).float()
+        loss =sim_loss(logits, targets)
+        # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
-        loss = loss / accumulation_steps
+        # loss = loss / accumulation_steps
         loss.backward()
         # plot_grad_flow(model.named_parameters())
         if (i + 1) % accumulation_steps == 0:
@@ -288,9 +300,9 @@ def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
             optimizer.step()
             optimizer.zero_grad()
 
-        # For logging
-        for log_k in log_dict:
-            metric_log.update(name=log_k, value=log_dict[log_k])
+        # # For logging
+        # for log_k in log_dict:
+        #     metric_log.update(name=log_k, value=log_dict[log_k])
         iter_end_timestamp = time.time()
         metric_log.update(name="time per iter", value=iter_end_timestamp-iter_start_timestamp)
         # Outputs logs

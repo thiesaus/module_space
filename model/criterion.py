@@ -78,8 +78,8 @@ class ModuleCriterion:
         # 2. Compute the mae loss.
         cross_text_image = sum([ self.get_cross_text_image_loss(outputs=out) for out in model_out ]) 
 
-        self.loss["cross_image_text"] =  cross_image_text
-        self.loss["cross_text_image"] =  cross_text_image
+        self.loss["cross_image_text"] = self.loss["cross_image_text"]+  cross_image_text
+        self.loss["cross_text_image"] =self.loss["cross_image_text"]+  cross_text_image
         # Update logs.
         self.log[f"batch{batch_idx}_cross_image_text"] = cross_image_text.item()
         self.log[f"batch{batch_idx}_cross_text_image"] = cross_text_image.item()
