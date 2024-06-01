@@ -12,24 +12,24 @@ class BasicBlock(nn.Module):
         self.is_downsample = is_downsample
         if is_downsample:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=2, padding=1, bias=False).requires_grad_()
+                c_in, c_out, 3, stride=2, padding=1, bias=False)
         else:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=1, padding=1, bias=False).requires_grad_()
-        self.bn1 = nn.BatchNorm2d(c_out).requires_grad_()
-        self.relu = nn.ReLU(True).requires_grad_()
+                c_in, c_out, 3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(c_out)
+        self.relu = nn.ReLU(True)
         self.conv2 = nn.Conv2d(c_out, c_out, 3, stride=1,
-                               padding=1, bias=False).requires_grad_()
-        self.bn2 = nn.BatchNorm2d(c_out).requires_grad_()
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(c_out)
         if is_downsample:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False).requires_grad_(),
-                nn.BatchNorm2d(c_out).requires_grad_()
+                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False),
+                nn.BatchNorm2d(c_out)
             )
         elif c_in != c_out:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False).requires_grad_(),
-                nn.BatchNorm2d(c_out).requires_grad_()
+                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False),
+                nn.BatchNorm2d(c_out)
             )
             self.is_downsample = True
 
@@ -56,10 +56,10 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
 class FeedForwardBlock(nn.Module):
     def __init__(self, dim, hidden_dim):
         super().__init__()
-        self.ln1 = nn.Linear(dim, hidden_dim).requires_grad_()
-        self.ln2 = nn.Linear(hidden_dim, dim).requires_grad_()
-        self.act = nn.ReLU().requires_grad_()
-        self.norm = nn.LayerNorm(dim).requires_grad_()
+        self.ln1 = nn.Linear(dim, hidden_dim)
+        self.ln2 = nn.Linear(hidden_dim, dim)
+        self.act = nn.ReLU()
+        self.norm = nn.LayerNorm(dim)
     def forward(self, x):
         h_res = x
         x = self.norm(x)
@@ -76,21 +76,21 @@ class FusionBlock(nn.Module):
         self.text_dim = text_dim    
         local_reso = 16* 16
         local_scale = local_reso ** -0.5
-        # self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
-        # self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
-        self.linear1 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
-        self.linear2 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
-        self.linear3 = nn.Linear(self.text_dim, self.img_dim).to(self.device).requires_grad_()
+        # self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device)
+        # self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device)
+        self.linear1 = nn.Linear(self.text_dim, self.img_dim).to(self.device)
+        self.linear2 = nn.Linear(self.text_dim, self.img_dim).to(self.device)
+        self.linear3 = nn.Linear(self.text_dim, self.img_dim).to(self.device)
         self.fusion = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
         dropout=0.,
-        ).to(self.device).requires_grad_()
+        ).to(self.device)
         self.self_attn = nn.MultiheadAttention(
         embed_dim=self.img_dim,
         num_heads=num_heads,
         dropout=0.,
-        ).to(self.device).requires_grad_()
+        ).to(self.device)
     
     def forward(self, query, key,value,is_mul=False):
         _query = self.linear1(query) 
@@ -123,7 +123,7 @@ class ZicZacBlock(nn.Module):
         embed_dim=self.img_dim,
         num_heads=num_heads,
         dropout=0.,
-        ).to(self.device).requires_grad_()
+        ).to(self.device)
         self.is_last=is_last
 
     def forward(self, one, two):
@@ -149,7 +149,7 @@ def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
     for i in range(repeat_times):
         blocks += [ZicZacBlock(img_dim, text_dim,device=device), ]
     blocks+=[ZicZacBlock(img_dim, text_dim,is_last=True,device=device),]
-    return nn.Sequential(*blocks)
+    return blocks
 
 class Model4(nn.Module):
     def __init__(self, ):
@@ -172,14 +172,14 @@ class Model4(nn.Module):
         self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
 
         #reprocess text
-        self.text_linear = nn.Linear(768, 384).to(self.device).requires_grad_()
-        self.text_linear1 = nn.Linear(384, 192).to(self.device).requires_grad_()
-        self.text_linear2 = nn.Linear(192, 96).to(self.device).requires_grad_()
-        self.text_linear3 = nn.Linear(96, 64).to(self.device).requires_grad_()
-        self.text_linear4 = nn.Linear(4096, 2048).to(self.device).requires_grad_()
-        self.text_linear5 = nn.Linear(2048, 1024).to(self.device).requires_grad_()
-        self.text_linear6 = nn.Linear(1024, 512).to(self.device).requires_grad_()
-        self.text_linear7 = nn.Linear(512, 256).to(self.device).requires_grad_()
+        self.text_linear = nn.Linear(768, 384).to(self.device)
+        self.text_linear1 = nn.Linear(384, 192).to(self.device)
+        self.text_linear2 = nn.Linear(192, 96).to(self.device)
+        self.text_linear3 = nn.Linear(96, 64).to(self.device)
+        self.text_linear4 = nn.Linear(4096, 2048).to(self.device)
+        self.text_linear5 = nn.Linear(2048, 1024).to(self.device)
+        self.text_linear6 = nn.Linear(1024, 512).to(self.device)
+        self.text_linear7 = nn.Linear(512, 256).to(self.device)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
         self.numlayers=12
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
@@ -188,8 +188,8 @@ class Model4(nn.Module):
         self.logit_scale = nn.Parameter(torch.tensor(10.0),requires_grad=True).to(self.device)
         local_reso = 16* 16
         local_scale = local_reso ** -0.5
-        self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
-        self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device).requires_grad_()
+        self.emb = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device)
+        self.emb2 = nn.Parameter(local_scale * randn(local_reso),requires_grad=True).to(self.device)
     
     def forward(self, x):
         batch_feats=[self.processing_input(i) for i in x] # arr([{"local_images":PIL.Image[n],"global_images":1,"sentences":str[m]}])
@@ -217,19 +217,30 @@ class Model4(nn.Module):
         for block in self.supa_layer:
             local_feat_1,text_feat_1 = block(local_feat_1,text_feat_1)
         full_feat=local_feat_1
-        all_logits=[]
+        all_logits=None
         for i,quantity in enumerate(quantities):
             ff=full_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else full_feat[i*quantity:]
             lf=text_feat[i*quantity:(i+1)*quantity] if i+1<len(quantities) else text_feat[i*quantity:]
-            logits=[]
+            logits=None
             
             for fs_f in ff:
-                logit=[]
+                logit=None
                 for text_f in lf:
-                    logit.append((self.logit_scale.exp()*F.cosine_similarity(fs_f, text_f,dim=-1)).item())
+                    temp=self.logit_scale.exp()*F.cosine_similarity(fs_f, text_f,dim=-1)
+                    if logit is None:
+                        logit=temp
+                    else:
+                        logit=torch.hstack([logit,temp])
                     # logit.append(self.logit_scale.exp() * fs_f @ text_f)
-                logits.append(logit)
-            all_logits.append( torch.tensor(logits,device=self.device))
+                if logits is None:
+                    logits=logit.unsqueeze(0)
+                else:
+                    logits=torch.vstack([logits,logit])
+
+            if all_logits is None:
+                all_logits=logits.unsqueeze(0)
+            else:
+                all_logits=torch.vstack([all_logits,logits.unsqueeze(0)])
 
         return dict({"logits": all_logits}  )
     

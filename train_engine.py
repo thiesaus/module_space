@@ -12,6 +12,7 @@ from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
 # from model.model4 import Model4,build_model4
 from model.model5 import Model5,build_model5
+from model.model4 import Model4,build_model4
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
 from model.criterion import ModuleCriterion,build_criterion
@@ -35,7 +36,7 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_model5(config=config)
+    model = build_model4(config=config)
     
 
     # Load Pretrained Model
@@ -74,7 +75,7 @@ def train(config: dict):
     optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
     wandb.init(
       # Set the project where this run will be logged
-      project="experiment_model6", 
+      project="model13", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
       name=f"model13_ikun", 
       # Track hyperparameters and run metadata
@@ -235,7 +236,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
+def train_one_epoch(model: Model4, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
@@ -278,13 +279,13 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
             continue
         iter_start_timestamp = time.time()
 
-        model_outputs= model(datas[0])
+        model_outputs= model(datas)
     
         # criterion.init_module(device=device)
         # criterion.process(model_outputs=model_outputs,batch_idx=i)
         # loss_dict,log_dict=criterion.get_loss_and_log()
         logits = model_outputs['logits']
-        targets = torch.tensor([1 for _ in range(len(logits))],device=logits.device).float()
+        targets = torch.ones(logits.shape,device=model.device)
         loss =sim_loss(logits, targets)
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
@@ -292,13 +293,13 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         # loss = loss / accumulation_steps
         loss.backward()
         # plot_grad_flow(model.named_parameters())
-        if (i + 1) % accumulation_steps == 0:
+        # if (i + 1) % accumulation_steps == 0:
             # if max_norm > 0:
             #     torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
             # else:
             #     pass
-            optimizer.step()
-            optimizer.zero_grad()
+        optimizer.zero_grad()
+        optimizer.step()
 
         # # For logging
         # for log_k in log_dict:

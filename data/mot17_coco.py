@@ -233,11 +233,11 @@ class MOT17_COCO(MOTDataset):
         if "CrowdHuman" in begin_frame_path:
             return [begin_frame_path] * self.sample_length
         if self.sample_mode == "random_interval":
-            # assert self.sample_length > 1, "Sample Length is less than 2."
+            assert self.sample_length > 1, "Sample Length is less than 2."
             vid = begin_frame_path.split(self.spliter)[-3]
             begin_t = int(begin_frame_path.split(self.spliter)[-1].split(".")[0])
             remain_frames = self.sample_vid_tmax[vid] - begin_t
-            max_interval = math.floor(remain_frames / (self.sample_length))
+            max_interval = math.floor(remain_frames / (self.sample_length - 1))
             interval = min(randint(1, self.sample_interval), max_interval)
             frame_idx = [begin_t + interval * i for i in range(self.sample_length)]
             if "MOTSynth" in begin_frame_path:

@@ -79,7 +79,7 @@ PRETRAINED_MODEL: dab_deformable_detr.pth
 
 # Sampling setting
 SAMPLE_STEPS: [60, 100]
-SAMPLE_LENGTHS: [1,1,1]
+SAMPLE_LENGTHS: [2,3,4]
 SAMPLE_MODES: [random_interval]
 SAMPLE_INTERVALS: [10]
 SAMPLE_MOT17_JOIN: 0
