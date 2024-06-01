@@ -392,7 +392,7 @@ class Model5(nn.Module):
         return padded_temp
     
     def image_encoder(self, image): # [1,49,768]
-        inputs = self.image_processor(image, return_tensors="pt",do_scale=False).to(self.device)    
+        inputs = self.image_processor(image, return_tensors="pt",do_rescale=False).to(self.device)    
         outputs = self.swinv2_model(**inputs)
         last_hidden_states = outputs.last_hidden_state
         return last_hidden_states 
