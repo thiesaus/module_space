@@ -79,7 +79,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"mode101_100epochs", 
+      name=f"mode101_200epochs", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -307,7 +307,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        output_dict["train"]=dict(epoch=epoch,iter=i,loss=loss.item())
+        output_dict["train"]=dict(epoch=epoch,loss=loss.item())
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
@@ -357,6 +357,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
     logger.write(head=f"[Epoch: {epoch}, Total Time: {epoch_minutes}min]",
                  log=metric_log, filename="log.txt", mode="a")
     logger.tb_add_metric_log(log=metric_log, steps=epoch, mode="epochs")
+    output_dict["metric_log"]=dict(loss=metric_log.get_avg())
     return output_dict
 
 def test_one_epoch(model:Model5,dataloader_test: DataLoader,epoch):

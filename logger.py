@@ -101,6 +101,7 @@ class MetricLog:
     def total_loss(self):
         return f"loss = {self.metrics['total_loss'].avg:.4f} "
     
+
     def get_avg(self):
         return self.metrics["total_loss"].avg
 
