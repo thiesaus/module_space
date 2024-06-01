@@ -198,18 +198,14 @@ class Model5(nn.Module):
         visual_feat = self.visual_local_global(
                     x['local_images'], x['global_image'], textual_feat
                 )
-        logits=[]
         b= x['local_images'].shape[0]
-        visual_feat = rearrange(visual_feat,'(b t) c -> b t c',b=b)
-        for i in range(textual_hidden.shape[0]):
-            temp =visual_feat[i]
-            textual =textual_hidden[i]
-            temp_logit=torch.zeros(1,device=self.device,requires_grad=True)
-            for j in range(temp.shape[0]):
-                temp_feat=temp[j]
-                temp_logit = temp_logit + F.cosine_similarity(temp_feat, textual,dim=-1)
+        visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
+        logits = F.cosine_similarity(visual_feat, textual_hidden,dim=-1)
+        temp=torch.zeros(logits.shape[1],device=self.device,requires_grad=True)
+        for i in range(logits.shape[0]):
+            temp= temp+logits[i]
             
-            logits.append(temp_logit/2)
+        logits=temp/logits.shape[0]
             
 
         output['logits'] = torch.tensor(logits, device=self.device, requires_grad=True)
@@ -396,7 +392,7 @@ class Model5(nn.Module):
         return padded_temp
     
     def image_encoder(self, image): # [1,49,768]
-        inputs = self.image_processor(image, return_tensors="pt",).to(self.device)
+        inputs = self.image_processor(image, return_tensors="pt",do_scale=False).to(self.device)    
         outputs = self.swinv2_model(**inputs)
         last_hidden_states = outputs.last_hidden_state
         return last_hidden_states 

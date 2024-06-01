@@ -66,8 +66,11 @@ def test_accuracy(model,dataloader, save_img=False):
             #             join(save_dir, file_name)
             #         )
             #         global_idx += 1
-
-    PRECISION = TP / (TP + FP) * 100
-    RECALL = TP / (TP + FN) * 100
+    if TP == 0:
+        PRECISION = 0
+        RECALL = 0
+    else:
+        PRECISION = TP / (TP + FP) * 100
+        RECALL = TP / (TP + FN) * 100
     print(TP, FP, FN)
     return PRECISION, RECALL
