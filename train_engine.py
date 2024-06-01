@@ -79,7 +79,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="experiment_model6", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"mode101_ikun", 
+      name=f"mode101_100epochs", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
