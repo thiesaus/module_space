@@ -100,7 +100,7 @@ class Model5(nn.Module):
         self.text_dim = 768
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=False)
-        self._freeze_text_encoder()
+        # self._freeze_text_encoder()
 
         self.fusion_local_global = nn.MultiheadAttention(
             embed_dim=self.img_dim,

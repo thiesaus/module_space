@@ -42,6 +42,7 @@ def load_checkpoint(model: nn.Module, path: str, states: dict = None,
         scheduler.load_state_dict(load_state["scheduler"])
     if states is not None:
         states.update(load_state["states"])
+    print(f"Checkpoint is loaded from {path}.")
     return
 
 
