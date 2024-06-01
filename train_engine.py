@@ -137,10 +137,10 @@ def train(config: dict):
         # dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
         #                                     batch_size=config["BATCH_SIZE"], num_workers=config["NUM_WORKERS"])
 
-        if epoch >= config["ONLY_TRAIN_QUERY_UPDATER_AFTER"]:
-            optimizer.param_groups[0]["lr"] = 0.0
-            optimizer.param_groups[1]["lr"] = 0.0
-            optimizer.param_groups[3]["lr"] = 0.0
+        # if epoch >= config["ONLY_TRAIN_QUERY_UPDATER_AFTER"]:
+        #     optimizer.param_groups[0]["lr"] = 0.0
+        #     optimizer.param_groups[1]["lr"] = 0.0
+        #     optimizer.param_groups[3]["lr"] = 0.0
         lrs = [optimizer.param_groups[_]["lr"] for _ in range(len(optimizer.param_groups))]
         assert len(lrs) == len(lr_names)
         lr_info = [{name: lr} for name, lr in zip(lr_names, lrs)]
@@ -159,7 +159,7 @@ def train(config: dict):
                     no_grad_frames = config["NO_GRAD_FRAMES"][i]
                     break
 
-        train_one_epoch(
+        output_dict=train_one_epoch(
             model=model,
             train_states=train_states,
             max_norm=config["CLIP_MAX_NORM"],
@@ -172,9 +172,10 @@ def train(config: dict):
             accumulation_steps=config["ACCUMULATION_STEPS"],
             multi_checkpoint=multi_checkpoint,
         )
-        scheduler.step()
         p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
-        wandb.log({"test":{ "epoch":epoch,"precision":p,"recall":r }})
+        output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
+        wandb.log(output_dict)
+        scheduler.step()
 
         train_states["start_epoch"] += 1
         if multi_checkpoint is True:
@@ -271,7 +272,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
     dataloader_len=len(dataloader)
     metric_log = MetricLog()
     epoch_start_timestamp = time.time()
-
+    output_dict=dict()
     for i, data in enumerate(dataloader):
         # datas=convert_data(batch)
         # run=True
@@ -306,7 +307,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        wandb.log({"train":{ "epoch":epoch,"iter":i,"loss":loss.item() }})
+        output_dict["train"]=dict(epoch=epoch,iter=i,loss=loss.item())
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
@@ -356,8 +357,7 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
     logger.write(head=f"[Epoch: {epoch}, Total Time: {epoch_minutes}min]",
                  log=metric_log, filename="log.txt", mode="a")
     logger.tb_add_metric_log(log=metric_log, steps=epoch, mode="epochs")
-
-    return
+    return output_dict
 
 def test_one_epoch(model:Model5,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()

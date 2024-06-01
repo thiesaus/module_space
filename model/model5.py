@@ -202,10 +202,12 @@ class Model5(nn.Module):
         visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
         logits = F.cosine_similarity(visual_feat, textual_hidden,dim=-1)
         temp=torch.zeros(logits.shape[1],device=self.device,requires_grad=True)
+        count=0
         for i in range(logits.shape[0]):
-            temp= temp+logits[i]
-            
-        logits=temp/logits.shape[0]
+            temp= temp+logits[i]*(i+1)
+            count+=i+1
+        
+        logits=temp/count
             
 
         output['logits'] = torch.tensor(logits, device=self.device, requires_grad=True)

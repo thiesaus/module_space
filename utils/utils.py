@@ -120,7 +120,7 @@ def plot_grad_flow(named_parameters):
     max_grads= []
     layers = []
     for n, p in named_parameters:
-        if(p.requires_grad):
+        if(p.requires_grad) and ("bias" not in n):
             layers.append(n)
             ave_grads.append(p.abs().mean().cpu().detach().numpy())
             max_grads.append(p.abs().max().cpu().detach().numpy())
