@@ -181,7 +181,7 @@ def train(config: dict):
         if multi_checkpoint is True:
             pass
         else:
-            if  config["EPOCHS"] < 100 or (epoch + 1) % 2 == 0:
+            if (epoch + 1) % config["EPOCHS_SPACE"] == 0:
                 save_checkpoint(
                     model=model,
                     path=os.path.join(config["OUTPUTS_DIR"], f"checkpoint_{epoch}.pth"),
