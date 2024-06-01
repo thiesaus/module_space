@@ -15,24 +15,24 @@ class BasicBlock(nn.Module):
         self.is_downsample = is_downsample
         if is_downsample:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=2, padding=1, bias=False).requires_grad_()
+                c_in, c_out, 3, stride=2, padding=1, bias=False)
         else:
             self.conv1 = nn.Conv2d(
-                c_in, c_out, 3, stride=1, padding=1, bias=False).requires_grad_()
-        self.bn1 = nn.BatchNorm2d(c_out).requires_grad_()
-        self.relu = nn.ReLU(True).requires_grad_()
+                c_in, c_out, 3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(c_out)
+        self.relu = nn.ReLU(True)
         self.conv2 = nn.Conv2d(c_out, c_out, 3, stride=1,
-                               padding=1, bias=False).requires_grad_()
-        self.bn2 = nn.BatchNorm2d(c_out).requires_grad_()
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(c_out)
         if is_downsample:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False).requires_grad_(),
-                nn.BatchNorm2d(c_out).requires_grad_()
+                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False),
+                nn.BatchNorm2d(c_out)
             )
         elif c_in != c_out:
             self.downsample = nn.Sequential(
-                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False).requires_grad_(),
-                nn.BatchNorm2d(c_out).requires_grad_()
+                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False),
+                nn.BatchNorm2d(c_out)
             )
             self.is_downsample = True
 
@@ -86,14 +86,14 @@ class Model5(nn.Module):
         self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
 
         #reprocess text
-        self.text_linear = nn.Linear(768, 384).to(self.device).requires_grad_()
-        self.text_linear1 = nn.Linear(384, 192).to(self.device).requires_grad_()
-        self.text_linear2 = nn.Linear(192, 96).to(self.device).requires_grad_()
-        self.text_linear3 = nn.Linear(96, 64).to(self.device).requires_grad_()
-        self.text_linear4 = nn.Linear(4096, 2048).to(self.device).requires_grad_()
-        self.text_linear5 = nn.Linear(2048, 1024).to(self.device).requires_grad_()
-        # self.text_linear6 = nn.Linear(1024, 512).to(self.device).requires_grad_()
-        # self.text_linear7 = nn.Linear(512, 256).to(self.device).requires_grad_()
+        self.text_linear = nn.Linear(768, 384).to(self.device)
+        self.text_linear1 = nn.Linear(384, 192).to(self.device)
+        self.text_linear2 = nn.Linear(192, 96).to(self.device)
+        self.text_linear3 = nn.Linear(96, 64).to(self.device)
+        self.text_linear4 = nn.Linear(4096, 2048).to(self.device)
+        self.text_linear5 = nn.Linear(2048, 1024).to(self.device)
+        # self.text_linear6 = nn.Linear(1024, 512).to(self.device)
+        # self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.feature_dim=1024
 
         self.img_dim = 1024
@@ -207,7 +207,7 @@ class Model5(nn.Module):
         logits=temp/logits.shape[0]
             
 
-        output['logits'] = torch.tensor(logits, device=self.device, requires_grad=True)
+        output['logits'] = logits
         output['vis_feat'] = visual_feat
         output['text_feat'] = textual_feat
         return output

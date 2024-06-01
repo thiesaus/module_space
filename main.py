@@ -15,7 +15,7 @@ if __name__ == "__main__":
     config["DATA_ROOT"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR"
     config["TRAIN_COCO"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\outputs\\memotr_mot17_coco\\train\\mot17_train_coco_reforged.json"
     config["NO_TRANSFORM"]=True
-    config["EPOCHS"]=100
+    config["EPOCHS"]=200
     config["EPOCHS_SPACE"]=20
     config["LR_SCHEDULER"] == "Cosine"
     # ik
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     config["sample_expression_num"]=1
     config["sample_frame_stride"]=4
     config["track_root"]=""
-
+    config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 
     # config["RESUME"]="D:\\Thesis\\DamnShit\\module_space\\checkpoint_9.pth"
