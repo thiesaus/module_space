@@ -16,8 +16,9 @@ if __name__ == "__main__":
     config["TRAIN_COCO"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\outputs\\memotr_mot17_coco\\train\\mot17_train_coco_reforged.json"
     config["NO_TRANSFORM"]=True
     config["EPOCHS"]=10
+    config["LR_SCHEDULER"] == "Cosine"
     # ik
-    config["train_bs"]=8
+    config["train_bs"]=10
     config["test_bs"]=1
     config["num_workers"]=4
     config["img_hw"]=[(224, 224), (448, 448), (672, 672)]

@@ -172,8 +172,8 @@ def train(config: dict):
             accumulation_steps=config["ACCUMULATION_STEPS"],
             multi_checkpoint=multi_checkpoint,
         )
-        p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
-        output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
+        # p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
+        # output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
         wandb.log(output_dict)
         scheduler.step()
 
