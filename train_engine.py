@@ -173,7 +173,9 @@ def train(config: dict):
             multi_checkpoint=multi_checkpoint,
         )
         scheduler.step()
-        test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
+        p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
+        wandb.log({"test":{ "epoch":epoch,"precision":p,"recall":r }})
+
         train_states["start_epoch"] += 1
         if multi_checkpoint is True:
             pass
@@ -359,12 +361,11 @@ def train_one_epoch(model: Model5, train_states: dict, max_norm: float,
 
 def test_one_epoch(model:Model5,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()
-    if (epoch + 1) % 1 == 0:
-        p, r = test_accuracy(model, dataloader_test)
-        log_info = 'precision: {:.2f}% / recall: {:.2f}%'.format(p, r)
-        wandb.log({"test":{ "epoch":epoch,"precision":p,"recall":r }})
+    # if (epoch + 1) % 1 == 0:
+    p, r = test_accuracy(model, dataloader_test)
+    log_info = 'precision: {:.2f}% / recall: {:.2f}%'.format(p, r)
 
-        print(log_info)
+    print(log_info)
     # if (epoch + 1) % opt.save_frequency == 0:
     #     state_dict = {
     #         'model': model.state_dict(),
@@ -373,3 +374,4 @@ def test_one_epoch(model:Model5,dataloader_test: DataLoader,epoch):
     #     }
     #     torch.save(state_dict, join(opt.save_dir, f'epoch{epoch}.pth'))
     torch.cuda.empty_cache()
+    return p,r
