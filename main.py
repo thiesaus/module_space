@@ -34,7 +34,7 @@ if __name__ == "__main__":
     config["sample_expression_num"]=1
     config["sample_frame_stride"]=4
     config["track_root"]=""
-    config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
+    # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 
     # config["RESUME"]="D:\\Thesis\\DamnShit\\module_space\\checkpoint_9.pth"
