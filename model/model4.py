@@ -134,11 +134,11 @@ class ZicZacBlock(nn.Module):
         #     fusion_1_2=self.layer2(key, fusion_1_1,is_add=True)
         #     return query,key, fusion_1_2
         
-        fusion_1=self.layer1(one, two,one,is_mul=self.is_last)
-        fusion_2=self.layer2(two,one,two,is_mul=self.is_last)
+        fusion_1=self.layer1(one, two,two,is_mul=self.is_last)
+        fusion_2=self.layer2(two,one,one,is_mul=self.is_last)
 
-        fusion_3=self.layer3(fusion_1, fusion_1,fusion_2,is_mul=self.is_last)
-        fusion_4=self.layer4(fusion_2, fusion_2,fusion_1,is_mul=self.is_last)
+        fusion_3=self.layer3(fusion_2, fusion_1,fusion_1,is_mul=self.is_last)
+        fusion_4=self.layer4(fusion_2, fusion_1,fusion_1,is_mul=self.is_last)
         if self.is_last:
             return self.fusion(fusion_3, fusion_4, fusion_4)[0],None
         return fusion_3,fusion_4
@@ -183,7 +183,7 @@ class Model4(nn.Module):
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=12
+        self.numlayers=4
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
  
