@@ -80,7 +80,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="Model13", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"mode131.2", 
+      name=f"mode131.2_8layer", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
