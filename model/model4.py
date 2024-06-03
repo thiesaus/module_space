@@ -138,7 +138,7 @@ class ZicZacBlock(nn.Module):
         fusion_2=self.layer2(two,one,one,is_mul=False)
 
         fusion_3=self.layer3(fusion_2, fusion_1,fusion_1,is_mul=False)
-        fusion_4=self.layer4(fusion_2, fusion_1,fusion_1,is_mul=self.is_last)
+        fusion_4=self.layer4(fusion_1, fusion_2,fusion_2,is_mul=self.is_last)
         if self.is_last:
             return self.fusion(fusion_3, fusion_4, fusion_4)[0],None
         return fusion_3,fusion_4
