@@ -152,7 +152,7 @@ def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
     return blocks
 
 class Model4(nn.Module):
-    def __init__(self, ):
+    def __init__(self, config):
         super(Model4, self).__init__()
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -183,7 +183,7 @@ class Model4(nn.Module):
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=8
+        self.numlayers=config["NUM_LAYERS"]
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
  
@@ -369,7 +369,7 @@ class Model4(nn.Module):
 
 def build_model4(config: dict):
 
-    model = Model4()
+    model = Model4(config)
     if config["AVAILABLE_GPUS"] is not None and config["DEVICE"] == "cuda":
         model.to(device=torch.device(config["DEVICE"], distributed_rank()))
     else:
