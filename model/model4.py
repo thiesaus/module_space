@@ -164,13 +164,13 @@ class Model4(nn.Module):
 
         self.feature_dim=1024
 
-        self.img_dim = 256
-        self.text_dim = 256
+        self.img_dim = 1024
+        self.text_dim = 1024
         #reprocess image
-        self.reprocess_image=make_layers(1024, 512, 2, is_downsample=False)
-        self.reprocess_image1=make_layers(512, 512, 2, is_downsample=True)
-        self.reprocess_image2=make_layers(512, 256, 2, is_downsample=True)
-        self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
+        self.reprocess_image=make_layers(1024, 1024, 2, is_downsample=False)
+        self.reprocess_image1=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image2=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image3=make_layers(1024 , 1024 , 2, is_downsample=True)
 
         #reprocess text
         self.text_linear = nn.Linear(768, 384).to(self.device)
@@ -305,8 +305,8 @@ class Model4(nn.Module):
         text = rearrange(text,"b w c -> b (w c)")
         text = self.text_linear4(text)
         text = self.text_linear5(text)
-        text = self.text_linear6(text)
-        text = self.text_linear7(text)
+        # text = self.text_linear6(text)
+        # text = self.text_linear7(text)
         return text
 
     def text_encoder(self, text):  # [1,3,768]
