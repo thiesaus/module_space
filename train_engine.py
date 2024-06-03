@@ -80,7 +80,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="Model13", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"mode131.2", 
+      name=f"mode131.2_"+str(config["NUM_LAYERS"])+"layers", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -173,8 +173,9 @@ def train(config: dict):
             accumulation_steps=config["ACCUMULATION_STEPS"],
             multi_checkpoint=multi_checkpoint,
         )
-        # p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
-        # output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
+        if (epoch+1) % config["TEST_DIST"] ==0:
+            p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
+            output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
         wandb.log(output_dict)
         scheduler.step()
 

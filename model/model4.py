@@ -152,7 +152,7 @@ def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
     return blocks
 
 class Model4(nn.Module):
-    def __init__(self, ):
+    def __init__(self, config):
         super(Model4, self).__init__()
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -164,13 +164,13 @@ class Model4(nn.Module):
 
         self.feature_dim=1024
 
-        self.img_dim = 512
+        self.img_dim = 1024
         self.text_dim = 1024
         #reprocess image
         self.reprocess_image=make_layers(1024, 1024, 2, is_downsample=False)
-        self.reprocess_image1=make_layers(512, 512, 2, is_downsample=True)
-        self.reprocess_image2=make_layers(512, 512, 2, is_downsample=True)
-        self.reprocess_image3=make_layers(512 , 512 , 2, is_downsample=True)
+        self.reprocess_image1=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image2=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image3=make_layers(1024 , 1024 , 2, is_downsample=True)
 
         #reprocess text
         self.text_linear = nn.Linear(768, 384).to(self.device)
@@ -184,7 +184,7 @@ class Model4(nn.Module):
         self.text_proj = nn.Linear(self.text_dim, self.feature_dim)
         self.vis_proj = nn.Linear(self.img_dim, self.feature_dim)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=4
+        self.numlayers=config["NUM_LAYERS"]
         self.supa_layer=make_ziczac_layers(self.feature_dim, self.feature_dim, self.numlayers,device=self.device)
 
         self.temp = nn.Parameter(0.07*torch.ones([]))  
@@ -328,8 +328,8 @@ class Model4(nn.Module):
         text_hidden = rearrange(text_hidden,"b w c -> b (w c)")
         text_hidden = self.text_linear4(text_hidden)
         text_hidden = self.text_linear5(text_hidden)
-        text_hidden = self.text_linear6(text_hidden)
-        text_hidden = self.text_linear7(text_hidden)
+        # text_hidden = self.text_linear6(text_hidden)
+        # text_hidden = self.text_linear7(text_hidden)
         if self.training:
             return text_hidden
         else:
@@ -362,7 +362,7 @@ class Model4(nn.Module):
 
 def build_model4(config: dict):
 
-    model = Model4()
+    model = Model4(config)
     if config["AVAILABLE_GPUS"] is not None and config["DEVICE"] == "cuda":
         model.to(device=torch.device(config["DEVICE"], distributed_rank()))
     else:
