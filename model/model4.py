@@ -183,7 +183,7 @@ class Model4(nn.Module):
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=4
+        self.numlayers=8
         self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
 
  
