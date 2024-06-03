@@ -76,16 +76,16 @@ def train(config: dict):
     # Optimizer
     param_groups, lr_names = get_param_groups(config=config, model=model)
     optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
-    # wandb.init(
-    #   # Set the project where this run will be logged
-    #   project="Model13", 
-    #   # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-    #   name=f"mode131.2_"+str(config["NUM_LAYERS"])+"layers", 
-    #   # Track hyperparameters and run metadata
-    #   config={
-    #   "architecture": "Transformer",
-    #   "epochs": 500,
-    #   })
+    wandb.init(
+      # Set the project where this run will be logged
+      project="Model13", 
+      # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
+      name=f"mode131.2_"+str(config["NUM_LAYERS"])+"layers", 
+      # Track hyperparameters and run metadata
+      config={
+      "architecture": "Transformer",
+      "epochs": 500,
+      })
   
     # Scheduler
     if config["LR_SCHEDULER"] == "MultiStep":
