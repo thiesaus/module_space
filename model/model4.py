@@ -134,10 +134,10 @@ class ZicZacBlock(nn.Module):
         #     fusion_1_2=self.layer2(key, fusion_1_1,is_add=True)
         #     return query,key, fusion_1_2
         
-        fusion_1=self.layer1(one, two,two,is_mul=self.is_last)
-        fusion_2=self.layer2(two,one,one,is_mul=self.is_last)
+        fusion_1=self.layer1(one, two,two,is_mul=False)
+        fusion_2=self.layer2(two,one,one,is_mul=False)
 
-        fusion_3=self.layer3(fusion_2, fusion_1,fusion_1,is_mul=self.is_last)
+        fusion_3=self.layer3(fusion_2, fusion_1,fusion_1,is_mul=False)
         fusion_4=self.layer4(fusion_2, fusion_1,fusion_1,is_mul=self.is_last)
         if self.is_last:
             return self.fusion(fusion_3, fusion_4, fusion_4)[0],None
@@ -164,13 +164,13 @@ class Model4(nn.Module):
 
         self.feature_dim=1024
 
-        self.img_dim = 256
-        self.text_dim = 256
+        self.img_dim = 512
+        self.text_dim = 1024
         #reprocess image
-        self.reprocess_image=make_layers(1024, 512, 2, is_downsample=False)
+        self.reprocess_image=make_layers(1024, 1024, 2, is_downsample=False)
         self.reprocess_image1=make_layers(512, 512, 2, is_downsample=True)
-        self.reprocess_image2=make_layers(512, 256, 2, is_downsample=True)
-        self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
+        self.reprocess_image2=make_layers(512, 512, 2, is_downsample=True)
+        self.reprocess_image3=make_layers(512 , 512 , 2, is_downsample=True)
 
         #reprocess text
         self.text_linear = nn.Linear(768, 384).to(self.device)
@@ -181,12 +181,13 @@ class Model4(nn.Module):
         self.text_linear5 = nn.Linear(2048, 1024).to(self.device)
         self.text_linear6 = nn.Linear(1024, 512).to(self.device)
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
-        self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
+        self.text_proj = nn.Linear(self.text_dim, self.feature_dim)
+        self.vis_proj = nn.Linear(self.img_dim, self.feature_dim)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
         self.numlayers=4
-        self.supa_layer=make_ziczac_layers(self.img_dim, self.text_dim, self.numlayers,device=self.device)
+        self.supa_layer=make_ziczac_layers(self.feature_dim, self.feature_dim, self.numlayers,device=self.device)
 
- 
+        self.temp = nn.Parameter(0.07*torch.ones([]))  
         self.logit_scale = nn.Parameter(torch.tensor(10.0),requires_grad=True).to(self.device)
         local_reso = 8* 8
         local_scale = local_reso ** -0.5
@@ -198,8 +199,6 @@ class Model4(nn.Module):
         batch_feats=self.processing_input(x)# arr([{"local_images":PIL.Image[n],"global_images":1,"sentences":str[m]}])
         #example
 
-        # quantities=[batch["local_images"].shape[0] for batch in batch_feats] # arr([n1,n2,n3,...])
-        # norm_feats={k:torch.vstack([i[k] for i in batch_feats]) for k in batch_feats[0].keys()} 
 
         #fusion local_global
         _local_feat=batch_feats["local_images"].requires_grad_()
@@ -207,25 +206,19 @@ class Model4(nn.Module):
         _local_feat=_local_feat + self.emb
         _local_feat=rearrange(_local_feat,"b a c -> b c a")
 
-        # _global_feat=norm_feats["global_images"].requires_grad_()
-        # _local_feat = local_feat + self.emb
 
         _local_feat=rearrange(_local_feat,"b (h w) c -> b c h w",h=8)
-        # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
 
         local_feat=self.cnn_image(_local_feat)
-
-       
-        # global_feat=self.cnn_image(_global_feat)
-
         local_feat=rearrange(local_feat,"b c h w -> b (h w c)")
-        # global_feat=rearrange(global_feat,"b c h w -> b (h w c)")
+        local_feat= F.normalize(self.vis_proj(local_feat),dim=-1)  
+
         text_feat=batch_feats["sentences"].requires_grad_()
         text_feat = text_feat.unsqueeze(1)  # [b,c]->[b,1,c]
         text_feat = text_feat.repeat([1, t, 1])
         text_feat = rearrange(text_feat, 'b t c -> (b t) c')
         text_hidden = text_feat
-        text_feat = self.fusion_fc(text_feat)
+        text_feat =F.normalize( self.text_proj(text_feat),dim=-1)
         # text_feat = rearrange(text_feat, 'bt c -> l bt c')
 
         full_feat=None
@@ -305,8 +298,8 @@ class Model4(nn.Module):
         text = rearrange(text,"b w c -> b (w c)")
         text = self.text_linear4(text)
         text = self.text_linear5(text)
-        text = self.text_linear6(text)
-        text = self.text_linear7(text)
+        # text = self.text_linear6(text)
+        # text = self.text_linear7(text)
         return text
 
     def text_encoder(self, text):  # [1,3,768]
