@@ -335,8 +335,8 @@ class Model4(nn.Module):
         text_hidden = rearrange(text_hidden,"b w c -> b (w c)")
         text_hidden = self.text_linear4(text_hidden)
         text_hidden = self.text_linear5(text_hidden)
-        text_hidden = self.text_linear6(text_hidden)
-        text_hidden = self.text_linear7(text_hidden)
+        # text_hidden = self.text_linear6(text_hidden)
+        # text_hidden = self.text_linear7(text_hidden)
         if self.training:
             return text_hidden
         else:
