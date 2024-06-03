@@ -125,23 +125,25 @@ class ZicZacBlock(nn.Module):
         dropout=0.,
         ).to(self.device)
         self.is_last=is_last
+        self.ffn = FeedForwardBlock(self.text_dim, self.img_dim).to(self.device)
 
-    def forward(self, one, two):
+    def forward(self, one, two,res=None):
         # if res is not None:
         #     fusion_1_1=self.layer1(query, res,is_add=True)
         #     if self.is_last:
         #         return query,key,self.layer2(key, fusion_1_1,is_mul=True)
         #     fusion_1_2=self.layer2(key, fusion_1_1,is_add=True)
         #     return query,key, fusion_1_2
-        
-        fusion_1=self.layer1(one, two,two,is_mul=False)
-        fusion_2=self.layer2(two,one,one,is_mul=False)
-
-        fusion_3=self.layer3(fusion_2, fusion_1,fusion_1,is_mul=False)
-        fusion_4=self.layer4(fusion_1, fusion_2,fusion_2,is_mul=self.is_last)
+        if res is not None:
+            temp_res=res
+        else:
+            temp_res=self.layer3(one, two,two,is_mul=False)
+        fusion_1=self.layer1(one, temp_res,temp_res,is_mul=False)
+        fusion_2=self.layer2(two,fusion_1,fusion_1,is_mul=self.is_last)
+        fusion_3=self.ffn(fusion_2)
         if self.is_last:
-            return self.fusion(fusion_3, fusion_4, fusion_4)[0],None
-        return fusion_3,fusion_4
+            return one,two,fusion_3
+        return one,two,fusion_3
        
 
 def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
@@ -225,7 +227,7 @@ class Model4(nn.Module):
         local_feat_1= local_feat
         text_feat_1= text_feat
         for block in self.supa_layer:
-            local_feat_1,text_feat_1 = block(local_feat_1,text_feat_1)
+            local_feat_1,text_feat_1,full_feat = block(local_feat_1,text_feat_1,full_feat)
         full_feat=rearrange(local_feat_1,"(b t) c -> t b c",t=t)
         text_hidden = rearrange(text_hidden, '(b t) c -> t b c', t=t)
         logits = F.cosine_similarity(full_feat, text_hidden,dim=-1)
