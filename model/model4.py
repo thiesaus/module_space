@@ -261,7 +261,7 @@ class Model4(nn.Module):
         text_feat = text_feat.unsqueeze(1)  # [b,c]->[b,1,c]
         text_feat = text_feat.repeat([1, t, 1])
         text_feat = rearrange(text_feat, 'b t c -> (b t) c')
-        text_hidden = text_feat
+        text_hidden = text_feat.clone()
         text_feat =F.normalize( self.text_proj(text_feat),dim=-1)
         # text_feat = rearrange(text_feat, 'bt c -> l bt c')
         text_feat,local_feat=self.enhanced_layer(text_feat,local_feat)
