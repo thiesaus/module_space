@@ -135,7 +135,7 @@ class Textual_Image_Model(nn.Module):
         textc_kv = repeat(text_features, 'm l c -> (repeat m) l c', repeat=n)
         textc_q = imagec_fusion + self.text_cross_q_embed(imagec_fusion)
         textc_kv = textc_kv + self.text_cross_kv_embed(textc_kv)
-        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] + textc_q
+        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] * textc_q
         overall_fusion = self.ffn3(textc_fusion)
 
         # 7. Rearrange batch
