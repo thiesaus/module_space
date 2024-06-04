@@ -153,6 +153,47 @@ def make_ziczac_layers(img_dim, text_dim, repeat_times,device="cuda"):
     blocks+=[ZicZacBlock(img_dim, text_dim,is_last=True,device=device),]
     return blocks
 
+
+class EnhancedBlock(nn.Module):
+    def __init__(self, img_dim, text_dim,num_heads=4,device="cuda"):
+        super(EnhancedBlock, self).__init__()
+        self.device=device
+        self.img_dim = img_dim
+        self.text_dim = text_dim
+        self.text_self= nn.MultiheadAttention(
+        embed_dim=self.text_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device)
+        self.img_self= nn.MultiheadAttention(
+        embed_dim=self.img_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device)
+        self.image_text=nn.MultiheadAttention(
+        embed_dim=self.img_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device)
+        self.text_image=nn.MultiheadAttention(
+        embed_dim=self.text_dim,
+        num_heads=num_heads,
+        dropout=0.,
+        ).to(self.device)
+        self.img_ffn = FeedForwardBlock(self.img_dim, self.text_dim).to(self.device)
+
+        self.text_ffn = FeedForwardBlock(self.text_dim, self.img_dim).to(self.device)
+    def forward(self,text_feat,image_feat):
+        text_feat2=self.text_self(text_feat,text_feat,text_feat)[0]
+        image_feat2=self.img_self(image_feat,image_feat,image_feat)[0]
+        image_text=self.image_text(image_feat2,text_feat2,text_feat2)[0]
+        text_image=self.text_image(text_feat2,image_text,image_text)[0]
+        text_feat=self.text_ffn(text_feat)
+        image_feat=self.img_ffn(image_feat)
+        return text_image,image_text
+
+
+
 class Model4(nn.Module):
     def __init__(self, config):
         super(Model4, self).__init__()
@@ -185,6 +226,7 @@ class Model4(nn.Module):
         self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.text_proj = nn.Linear(self.text_dim, self.feature_dim)
         self.vis_proj = nn.Linear(self.img_dim, self.feature_dim)
+        self.enhanced_layer=EnhancedBlock(self.feature_dim, self.feature_dim,device=self.device)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
         self.numlayers=config["NUM_LAYERS"]
         self.supa_layer=make_ziczac_layers(self.feature_dim, self.feature_dim, self.numlayers,device=self.device)
@@ -222,7 +264,7 @@ class Model4(nn.Module):
         text_hidden = text_feat
         text_feat =F.normalize( self.text_proj(text_feat),dim=-1)
         # text_feat = rearrange(text_feat, 'bt c -> l bt c')
-
+        text_feat,local_feat=self.enhanced_layer(text_feat,local_feat)
         full_feat=None
         local_feat_1= local_feat
         text_feat_1= text_feat
