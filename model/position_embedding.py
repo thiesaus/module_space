@@ -7,41 +7,30 @@ from torch import nn
 from utils.nested_tensor import NestedTensor
 
 
-class PositionEmbeddingSine(nn.Module):
-    def __init__(self, num_pos_feats=64, temperature=10000, normalize=False, scale=None):
-        super(PositionEmbeddingSine, self).__init__()
-        self.num_pos_feats = num_pos_feats
-        self.temperature = temperature
-        self.normalize = normalize
-        self.scale = scale
-        if self.normalize is True and self.scale is None:
-            raise ValueError("Scale should be NOT NONE when normalize is True.")
-        if self.scale is not None and self.normalize is False:
-            raise ValueError("Normalize should be True when scale is not None.")
 
-    def forward(self, ntensor: NestedTensor) -> torch.Tensor:
-        tensors, masks = ntensor.decompose()
-        assert masks is not None, "Masks in ntensor should be NOT NONE."
-        not_masks = ~masks
-        y = not_masks.cumsum(dim=1, dtype=torch.float32)
-        x = not_masks.cumsum(dim=2, dtype=torch.float32)
-        if self.normalize:
-            eps = 1e-6
-            y = (y - 0.5) / (y[:, -1:, :] + eps) * self.scale
-            x = (x - 0.5) / (x[:, :, -1:] + eps) * self.scale
+class PositionEmbeddingSinCos(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
 
-        dim_i = torch.arange(self.num_pos_feats, dtype=torch.float32, device=tensors.device)
-        dim_i = self.temperature ** (2 * (torch.div(dim_i, 2, rounding_mode="trunc")) / self.num_pos_feats)
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
 
-        pos_x = x[:, :, :, None] / dim_i
-        pos_y = y[:, :, :, None] / dim_i
-        pos_x = torch.stack((pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()), dim=4).flatten(3)
-        pos_y = torch.stack((pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), dim=4).flatten(3)
-        pos_embed = torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)    # (B, 2*num_pos_feats, H, W)
-        return pos_embed
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Arguments:
+            x: Tensor, shape ``[ batch_size,seq_len, embedding_dim]``
+        """
+        output = x.detach().requires_grad_(False).permute(1, 0, 2)
+        output = output + self.pe[:output.size(0)]
+        y= self.dropout(output)
+        return y.permute(1, 0, 2)
+        
+        
 
-
-def build(config: dict):
-    assert config["HIDDEN_DIM"] % 2 == 0, f"Hidden dim should be 2x, but get {config['HIDDEN_DIM']}."
-    num_pos_feats = config["HIDDEN_DIM"] / 2
-    return PositionEmbeddingSine(num_pos_feats=num_pos_feats, normalize=True, scale=2*math.pi, temperature=20)
+def build(hidden_dim ):
+    return PositionEmbeddingSinCos(d_model=hidden_dim)
