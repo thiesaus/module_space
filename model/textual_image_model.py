@@ -99,7 +99,7 @@ class Textual_Image_Model(nn.Module):
 
         # 5. Enhance Image and Text
         # Image to text
-        text_proj = self.text_proj(imgs_feat)
+        text_proj = self.text_proj(texts_feat)
         image_q =self.image_text_enhance_image_embed(imgs_feat)
         text_kv =self.image_text_enhance_text_embed(text_proj)
         image_text_attn = self.image_text_attn(image_q,text_kv,text_kv)[0] +image_q
@@ -107,9 +107,10 @@ class Textual_Image_Model(nn.Module):
         image_features=enhance_image.clone()
 
         # Text to Image
-        image_proj = self.text_proj_2(texts_feat)
-        text_q =self.text_image_enhance_text_embed(texts_feat)
-        image_kv = self.text_image_enhance_image_embed(image_proj)
+        
+        text_q = self.text_proj_2(texts_feat)
+        text_q =self.text_image_enhance_text_embed(text_q)
+        image_kv = self.text_image_enhance_image_embed(image_features)
         text_image_attn = self.text_image_attn(text_q,image_kv,image_kv)[0] +text_q
         enhance_text = self.ffn(text_image_attn)
         text_features=enhance_text.clone()
@@ -122,7 +123,7 @@ class Textual_Image_Model(nn.Module):
         # 6.1 Add embedding image
         cross_image_q = self.self_decode_embed(cross_image_q)
         # 6.2 Self Attention
-        cross_image_kv = image_features
+        cross_image_kv = cross_image_q
 
         cross_image_fusion = self.self_attn(cross_image_q,cross_image_kv,cross_image_kv)[0] 
 
@@ -135,7 +136,7 @@ class Textual_Image_Model(nn.Module):
         textc_kv = repeat(text_features, 'm l c -> (repeat m) l c', repeat=n)
         textc_q = self.text_cross_q_embed(imagec_fusion)
         textc_kv = self.text_cross_kv_embed(textc_kv)
-        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] *  textc_q
+        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] +  textc_q
         overall_fusion = self.ffn3(textc_fusion)
 
         # 7. Rearrange batch
