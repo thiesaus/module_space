@@ -211,10 +211,10 @@ class Textual_Image_Model(nn.Module):
         cross_image_fusion = self.self_attn(hidden_feat)
 
         # 6.3 Image Cross Attention
-        imagec_fusion = self.image_cross_attn(image_features,cross_image_fusion,cross_image_fusion)
+        imagec_fusion = self.image_cross_attn(cross_image_fusion,image_features,image_features)
 
         # 6.4 Text Cross Attention
-        textc_fusion = self.text_cross_attn(text_features,imagec_fusion,imagec_fusion)
+        textc_fusion = self.text_cross_attn(imagec_fusion,text_features,text_features)
         overall_fusion = self.ffn3(textc_fusion)
 
         # 7. Rearrange batch
