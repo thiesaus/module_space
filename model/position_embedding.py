@@ -25,7 +25,7 @@ class PositionEmbeddingSinCos(nn.Module):
         Arguments:
             x: Tensor, shape ``[ batch_size,seq_len, embedding_dim]``
         """
-        output = x.detach().requires_grad_(False).permute(1, 0, 2)
+        output = x.permute(1, 0, 2)
         output = output + self.pe[:output.size(0)]
         y= self.dropout(output)
         return y.permute(1, 0, 2)

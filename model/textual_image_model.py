@@ -76,40 +76,40 @@ class Textual_Image_Model(nn.Module):
         m = len(texts)
         
         # 1. Image Encoder
-        imgs = rearrange(imgs, 'b n c h w -> (b n) c h w').requires_grad_() #[bn,c,h,w]
+        imgs = rearrange(imgs, 'b n c h w -> (b n) c h w') #[bn,c,h,w]
         norm_imgs=self.batch_norm2D(imgs)
         norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
-        imgs_feat=self.images_encoder(norm_imgs) # [ bn, 64, 768]
+        imgs_feat=self.images_encoder(norm_imgs).requires_grad_() # [ bn, 64, 768]
         
         # 2. Text Encoder
-        texts_feat=self.text_encoder(texts) # [m,64,768]
+        texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         hidden_feat = texts_feat.clone()
 
         # 3. Image fusion Attention
         # 3.1 Add embedding image
-        imgs_feat = imgs_feat + self.image_pos_embed(imgs_feat)
+        imgs_feat = self.image_pos_embed(imgs_feat)
         # 3.2 Self Attention
         imgs_feat = self.image_self_attn(imgs_feat,imgs_feat,imgs_feat)[0]
 
         # 4. Text fusion Attention
         # 4.1 Add embedding text
-        texts_feat = texts_feat + self.text_pos_embed(texts_feat)
+        texts_feat = self.text_pos_embed(texts_feat)
         # 4.2 Self Attention
         texts_feat = self.text_self_attn(texts_feat,texts_feat,texts_feat)[0]
 
         # 5. Enhance Image and Text
         # Image to text
         text_proj = self.text_proj(imgs_feat)
-        image_q = imgs_feat + self.image_text_enhance_image_embed(imgs_feat)
-        text_kv = text_proj + self.image_text_enhance_text_embed(text_proj)
+        image_q =self.image_text_enhance_image_embed(imgs_feat)
+        text_kv =self.image_text_enhance_text_embed(text_proj)
         image_text_attn = self.image_text_attn(image_q,text_kv,text_kv)[0] +image_q
         enhance_image = self.ffn(image_text_attn)
         image_features=enhance_image.clone()
 
         # Text to Image
         image_proj = self.text_proj_2(texts_feat)
-        text_q = texts_feat + self.text_image_enhance_text_embed(texts_feat)
-        image_kv = image_proj + self.text_image_enhance_image_embed(image_proj)
+        text_q =self.text_image_enhance_text_embed(texts_feat)
+        image_kv = self.text_image_enhance_image_embed(image_proj)
         text_image_attn = self.text_image_attn(text_q,image_kv,image_kv)[0] +text_q
         enhance_text = self.ffn(text_image_attn)
         text_features=enhance_text.clone()
@@ -120,22 +120,22 @@ class Textual_Image_Model(nn.Module):
 
         cross_image_q =  self.text_proj_3(cross_image_q)
         # 6.1 Add embedding image
-        cross_image_q = cross_image_q + self.self_decode_embed(cross_image_q)
+        cross_image_q = self.self_decode_embed(cross_image_q)
         # 6.2 Self Attention
         cross_image_kv = image_features
 
-        cross_image_fusion = self.self_attn(cross_image_q,cross_image_kv,cross_image_kv)[0] + cross_image_q
+        cross_image_fusion = self.self_attn(cross_image_q,cross_image_kv,cross_image_kv)[0] 
 
         # 6.3 Image Cross Attention
-        imagec_q = cross_image_fusion + self.image_cross_q_embed(cross_image_fusion)
-        imagec_kv = image_features + self.image_cross_kv_embed(image_features)
+        imagec_q = self.image_cross_q_embed(cross_image_fusion)
+        imagec_kv = self.image_cross_kv_embed(image_features)
         imagec_fusion = self.image_cross_attn(imagec_q,imagec_kv,imagec_kv)[0] + imagec_q
 
         # 6.4 Text Cross Attention
         textc_kv = repeat(text_features, 'm l c -> (repeat m) l c', repeat=n)
-        textc_q = imagec_fusion + self.text_cross_q_embed(imagec_fusion)
-        textc_kv = textc_kv + self.text_cross_kv_embed(textc_kv)
-        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] * textc_q
+        textc_q = self.text_cross_q_embed(imagec_fusion)
+        textc_kv = self.text_cross_kv_embed(textc_kv)
+        textc_fusion = self.text_cross_attn(textc_q,textc_kv,textc_kv)[0] *  textc_q
         overall_fusion = self.ffn3(textc_fusion)
 
         # 7. Rearrange batch
