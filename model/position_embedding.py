@@ -28,9 +28,9 @@ class PositionEmbeddingSinCos(nn.Module):
         output = x.permute(1, 0, 2)
         output = output + self.pe[:output.size(0)]
         y= self.dropout(output)
-        return y.permute(1, 0, 2)
+        return y.permute(1, 0, 2).detach()
         
         
 
-def build(hidden_dim ):
-    return PositionEmbeddingSinCos(d_model=hidden_dim)
+def build(hidden_dim,dropout=0.1,max_len=5000 ):
+    return PositionEmbeddingSinCos(d_model=hidden_dim, dropout=dropout, max_len=max_len)
