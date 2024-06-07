@@ -217,7 +217,33 @@ class Textual_Image_Model(nn.Module):
         self.decoder_layer = DecoderLayer(self.encoder_dim)
         self.decoder_embedding =build(self.encoder_dim)
 
+        # Image Projection
+        self.img_fc = self.get_img_fc(use_ln=False)
+        self.text_fc = self.get_text_fc(use_ln=False)
+    def get_img_fc(self, use_ln=True):
+        if use_ln:
+            return nn.Sequential(
+                nn.Linear(self.encoder_dim, 1024),
+                nn.LayerNorm(1024, eps=1e-12),
+            )
+        else:
+            return nn.Linear(self.encoder_dim, 1024)
 
+    def get_text_fc(self, use_ln=True):
+        if use_ln:
+            return nn.Sequential(
+                nn.Linear(self.encoder_dim, self.encoder_dim),
+                nn.ReLU(),
+                nn.Linear(self.encoder_dim, 1024),
+                nn.LayerNorm(1024, eps=1e-12),
+            )
+        else:
+            return nn.Sequential(
+                nn.Linear(self.encoder_dim, self.encoder_dim),
+                nn.ReLU(),
+                nn.Linear(self.encoder_dim, 1024),
+            )
+            
     def images_encoder(self,images):
         inputs = self.image_processor(images, return_tensors="pt",do_rescale=False).to(self.device)
         outputs= self.image_model(**inputs)
@@ -228,6 +254,30 @@ class Textual_Image_Model(nn.Module):
         tokenizer_input = {k: inputs[k] for k in ['input_ids', 'attention_mask']}
         outputs = self.bert_model(**tokenizer_input)
         return outputs.last_hidden_state
+
+    def st_pooling(self, feat, bs):
+        # spatial pooling
+        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()   # [bt,c,l]->[bt,c]
+    
+        # temporal pooling
+        feat = rearrange(feat, '(b t) c -> b c t', b=bs)
+        feat = F.adaptive_avg_pool1d(feat, 1).squeeze() 
+
+        # projection
+        feat = self.img_fc(feat)
+        return feat
+
+    def text_pooling(self, feat, bs):
+        # spatial pooling
+        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()   # [bt,c,l]->[bt,c]
+    
+        # temporal pooling
+        feat = rearrange(feat, '(b t) c -> b c t', b=bs)
+        feat = F.adaptive_avg_pool1d(feat, 1).squeeze() 
+
+        # projection
+        feat = self.text_fc(feat)
+        return feat
 
     def forward(self,x):
         # x = {"local_images": PIL.Image[n],
@@ -245,6 +295,7 @@ class Textual_Image_Model(nn.Module):
         
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
+        real_texts_feat = texts_feat.clone()
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
         hidden_feat = texts_feat.clone()
         # check_hidden_feat = texts_feat.clone()
@@ -261,10 +312,13 @@ class Textual_Image_Model(nn.Module):
         # 4. Contrastive Loss
         loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
 
+        # 5. decoder Projection
+        decoder_feats = self.st_pooling(rearrange(decoder_feats,"l b c -> b c l"), b)
+        real_texts_feat = self.text_pooling(rearrange(real_texts_feat,"b l c -> b c l"), m)
+
+
         # 5. Cosine Similarity
-        logits = CosineSimilarity.forward(texts_feat.permute(1,0,2), decoder_feats.permute(1,0,2),device=self.device)
-        logits = logits.view(n,m)
-        logits= torch.sum(logits,0)/logits.shape[0]
+        logits = F.cosine_similarity(decoder_feats, real_texts_feat, dim=-1)
 
         return dict({"logits": logits,"loss":loss}  )
 
