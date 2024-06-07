@@ -6,85 +6,26 @@ from einops import rearrange,repeat
 from torch.nn import functional as F
 from model.position_embedding import build
 
-class SelfAttention(nn.Module):
-    def __init__(self, d_model, n_heads=8, dropout=0.1):
-        super(SelfAttention, self).__init__()
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.dropout = nn.Dropout(dropout)
 
-        self.multihead_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
-        self.pos_encoder = build(d_model,dropout)
+class AddNorm(nn.Module):
+    def __init__(self, d_model, dropout=0.1):
+        super(AddNorm, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
+    def forward(self, X, Y):
+        return self.layer_norm(self.dropout(Y) + X)
+class LayerNormalization(nn.Module):
+    def __init__(self, eps=1e-6):
+        super(LayerNormalization, self).__init__()
+        self.eps = eps
+        self.gamma = nn.Parameter(torch.ones(1))
+        self.beta = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        batch_size, length, feat = x.shape
-        x = x.permute(1, 0, 2)  # (length, batch_size, feat)
-        x = self.pos_encoder(x)
-        output, _ = self.multihead_attn(x, x, x)
-        output = output.permute(1, 0, 2) +x.permute(1, 0, 2)   # (batch_size, length, feat) 
-        
-        return output 
-
-class CrossModalAttention(nn.Module):
-    def __init__(self, q_dim, k_dim, v_dim, num_heads=8, dropout=0.1):
-        super(CrossModalAttention, self).__init__()
-        self.q_dim = q_dim
-        self.k_dim = k_dim
-        self.v_dim = v_dim
-        self.num_heads = num_heads
-        self.dropout = nn.Dropout(dropout)
-
-
-        self.query_embed= build(q_dim,dropout)
-        self.key_embed= build(k_dim,dropout)
-        self.value_embed= build(v_dim,dropout)
-        self.query_proj = nn.Linear(q_dim, q_dim)
-        self.key_proj = nn.Linear(k_dim, q_dim)
-        self.value_proj = nn.Linear(v_dim, v_dim)
-
-        self.multihead_attn = nn.MultiheadAttention(q_dim, num_heads)
-        self.layer_norm = nn.LayerNorm(q_dim)
-
-    def forward(self, query, key, value):
-        """
-        Args:
-            query (Tensor): Input tensor with shape (batch_size, q_len, q_dim)
-            key (Tensor): Input tensor with shape (batch_size, k_len, k_dim)
-            value (Tensor): Input tensor with shape (batch_size, v_len, v_dim)
-        Returns:
-            Tensor: Output tensor with shape (batch_size, q_len, q_dim)
-        """
-        batch_size, q_len, _ = query.size()
-        _, k_len, _ = key.size()
-        _, v_len, _ = value.size()
-
-        # Project the query, key, and value tensors
-        query_proj = self.query_proj(query)
-        key_proj = self.key_proj(key)
-        value_proj = self.value_proj(value)
-
-
-        query = self.query_embed(query_proj)
-        key = self.key_embed(key_proj)
-        value = self.value_embed(value_proj)
-
-        # Permute the tensors to match the expected input shape of nn.MultiheadAttention
-        query = query.permute(1, 0, 2)
-        key = key.permute(1, 0, 2)
-        value = value.permute(1, 0, 2)
-
-        # Apply cross-modal attention
-        attn_output, _ = self.multihead_attn(query, key, value)
-
-        # Permute the output tensor back to (batch_size, q_len, q_dim)
-        attn_output = attn_output.permute(1, 0, 2)
-
-        # Apply layer normalization
-        temp= attn_output + query_proj 
-        output = self.dropout(self.layer_norm(temp))
-
-        return output
-
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 
 class FeedForwardNetwork(nn.Module):
@@ -116,6 +57,140 @@ class FeedForwardNetwork(nn.Module):
 
         return ffn_output
 
+class PositionWiseFFN(nn.Module):  #@save
+    """The positionwise feed-forward network."""
+    def __init__(self, ffn_num_hiddens, ffn_num_outputs):
+        super().__init__()
+        self.dense1 = nn.LazyLinear(ffn_num_hiddens)
+        self.relu = nn.ReLU()
+        self.dense2 = nn.LazyLinear(ffn_num_outputs)
+
+    def forward(self, X):
+        return self.dense2(self.relu(self.dense1(X)))
+
+class FusionLayerBlock(nn.Module):
+    def __init__(self, d_model, n_heads=8, dropout=0.1):
+        super().__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+
+        # 1.Encoder layer
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm1 = AddNorm(d_model, dropout=dropout)
+        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm2 = AddNorm(d_model, dropout=dropout)
+        self.ffn = PositionWiseFFN(d_model, d_model)
+        self.add_norm3 = AddNorm(d_model, dropout=dropout)
+
+        # 2.Decoder layer
+        self.self_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm4 = AddNorm(d_model, dropout=dropout)
+        self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm5 = AddNorm(d_model, dropout=dropout)
+        self.ffn2 = PositionWiseFFN(d_model, d_model)
+        self.add_norm6 = AddNorm(d_model, dropout=dropout)
+
+    def forward(self, x1,x2):
+        y1,_= self.self_attn(x1,x1,x1)
+        y1 = self.add_norm1(y1,x1)
+
+
+        y2,_= self.self_attn2(x2,x2,x2)
+        y2 = self.add_norm4(y2,x2)
+
+        y2attn,_= self.cross_attn2(y2,y1,y1)
+        y2attn = self.add_norm5(y2attn,y2)
+
+        y1attn,_= self.cross_attn(y1,y2,y2)
+        y1attn = self.add_norm2(y1attn,y1)
+
+        y2_after= self.ffn2(y2attn)
+        y2_after = self.add_norm6(y2_after,y2attn)
+
+        y1_after= self.ffn(y1attn)
+        y1_after = self.add_norm3(y1_after,y1attn)
+
+        return y1_after,y2_after
+
+
+class FusionLayer(nn.Module):
+    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
+        super(FusionLayer, self).__init__()
+        self.device=device
+        self.d_model=d_model
+        self.num_layer=num_layer
+        self.fusionlayer= nn.ModuleList([FusionLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+    
+    def forward(self,x1,x2):
+        for i in range(self.num_layer):
+            x1,x2 = self.fusionlayer[i](x1,x2)
+        return x1,x2
+
+class CosineSimilarity(nn.Module):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def forward(x1, x2,device):
+        """
+        Args:
+            x1 (torch.Tensor): .
+            x2 (torch.Tensor): Second input tensor.
+        """
+        batch_size,length, _ = x1.size()
+        result = torch.zeros(batch_size,device=device)
+        for i in range(batch_size):
+            _x1 = rearrange(x1[i], 'l c -> (l c)')
+            _x2 = rearrange(x2[i], 'l c -> (l c)')
+            result[i] = F.cosine_similarity(_x1, _x2, dim=-1)
+        
+        return result
+
+
+class ContrastiveLoss(nn.Module):
+    def __init__(self, margin=0.5):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, output1, output2, target):
+        """
+        Args:
+            output1 (torch.Tensor): Feature embeddings for the first input.
+            output2 (torch.Tensor): Feature embeddings for the second input.
+            target (torch.Tensor): Binary label indicating whether the inputs are similar (1) or dissimilar (0).
+        """
+        distance = 1 - CosineSimilarity.forward(output1, output2,device=output1.device)
+        loss_contrastive = torch.mean((1 - target) * torch.pow(distance, 2) +
+                                     (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
+        return loss_contrastive
+class DecoderLayer(nn.Module):
+    def __init__(self,d_model, n_heads=8, dropout=0.1):
+        super(DecoderLayer, self).__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+
+        # 1.Encoder layer
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm1 = AddNorm(d_model, dropout=dropout)
+        self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm2 = AddNorm(d_model, dropout=dropout)
+        self.ffn = PositionWiseFFN(d_model, d_model)
+        self.add_norm3 = AddNorm(d_model, dropout=dropout)
+    def forward(self,x,imgs_feat,text_feat):
+        y,_= self.self_attn(x,x,x)
+        y = self.add_norm1(y,x)
+
+        yattn,_= self.image_cross_attn(y,imgs_feat,imgs_feat)
+        yattn = self.add_norm2(yattn,y)
+
+        yattn2,_= self.image_cross_attn(yattn,text_feat,text_feat)
+        yattn2 = self.add_norm2(yattn2,yattn)
+
+        y_after= self.ffn(yattn2)
+        y_after = self.add_norm3(y_after,yattn2)
+
+        return y_after
+
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
         super(Textual_Image_Model, self).__init__()
@@ -132,28 +207,16 @@ class Textual_Image_Model(nn.Module):
         self.bert_model=RobertaModel.from_pretrained("FacebookAI/roberta-base")
 
         #Image  Fusion Attention
-        self.image_self_attn = SelfAttention(self.encoder_dim).to(self.device)
+        self.position_embedding_image = build(self.encoder_dim)
+        self.position_embedding_text = build(self.encoder_dim)
+        self.fusion_image_layer = FusionLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.constrasive_loss = ContrastiveLoss()
+        self.alpha = nn.Parameter(torch.tensor(0.5),requires_grad=True)
 
-        #Text Fusion Attention
-        self.text_self_attn = SelfAttention(self.encoder_dim).to(self.device)
+        # Image Decoder Layer
+        self.decoder_layer = DecoderLayer(self.encoder_dim)
+        self.decoder_embedding =build(self.encoder_dim)
 
-        # Image to Text Enhance
-        self.image_text_attn = CrossModalAttention(self.encoder_dim,self.encoder_dim,self.encoder_dim).to(self.device)
-        self.ffn= FeedForwardNetwork(self.encoder_dim).to(self.device)
-
-        # Text to Image Enhance
-        self.text_image_attn =  CrossModalAttention(self.encoder_dim,self.encoder_dim,self.encoder_dim).to(self.device)
-        self.ffn2= FeedForwardNetwork(self.encoder_dim).to(self.device)
-
-
-        # Decode Layer
-        self.self_attn= SelfAttention(self.encoder_dim).to(self.device)
-        self.image_cross_attn= CrossModalAttention(self.encoder_dim,self.encoder_dim,self.encoder_dim).to(self.device)
-        self.text_cross_attn= CrossModalAttention(self.encoder_dim,self.encoder_dim,self.encoder_dim).to(self.device)
-        self.ffn3= FeedForwardNetwork(self.encoder_dim).to(self.device)
-
-        # Cosine Similarity
-        self.alpha=nn.Parameter(torch.tensor(10.0),requires_grad=True)      
 
     def images_encoder(self,images):
         inputs = self.image_processor(images, return_tensors="pt",do_rescale=False).to(self.device)
@@ -184,48 +247,28 @@ class Textual_Image_Model(nn.Module):
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
         hidden_feat = texts_feat.clone()
+        check_hidden_feat = texts_feat.clone()
 
-        # 3. Image fusion Attention
-        # 3.2 Self Attention
-        imgs_feat = self.image_self_attn(imgs_feat)
+        imgs_feat = self.position_embedding_image(imgs_feat)
+        texts_feat = self.position_embedding_text(texts_feat)
+        hidden_feat = self.decoder_embedding(hidden_feat)
+        # 3. Enhance Image and Text Features
+        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat.permute(1,0,2),texts_feat.permute(1,0,2))
 
-        # 4. Text fusion Attention
-        # 4.2 Self Attention
-        texts_feat = self.text_self_attn(texts_feat)
+        # 4. Decoder Layer
+        decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat)
 
-        # 5. Enhance Image and Text
-        # Image to text
-        image_text_attn = self.image_text_attn(imgs_feat,texts_feat,texts_feat)
-        enhance_image = self.ffn(image_text_attn)
-        image_features=enhance_image.clone()
+        # 4. Contrastive Loss
+        loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
 
-        # Text to Image
+        decoder_feats = decoder_feats.permute(1,0,2)
 
-        text_image_attn = self.text_image_attn(texts_feat,imgs_feat,imgs_feat)
-        enhance_text = self.ffn(text_image_attn)
-        text_features=enhance_text.clone()
-
-
-        # 6. overall fusion
-        # 6.2 Self Attention
-        cross_image_fusion = self.self_attn(hidden_feat)
-
-        # 6.3 Image Cross Attention
-        imagec_fusion = self.image_cross_attn(cross_image_fusion,image_features,image_features)
-
-        # 6.4 Text Cross Attention
-        textc_fusion = self.text_cross_attn(imagec_fusion,text_features,text_features)
-        overall_fusion = self.ffn3(textc_fusion)
-
-        # 7. Rearrange batch
-        overall_fusion = rearrange(overall_fusion, '(b n) l c -> n b (l c)', b=b)
-        hidden_feat = rearrange(hidden_feat, '(b m) l c -> b m (l c)',m=b)
-        
-        # 8. Cosine Similarity
-        logits = F.cosine_similarity(overall_fusion, hidden_feat, dim=-1)
-    
+        # 5. Cosine Similarity
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device)
+        logits = logits.view(n,m)
         logits=self.alpha*( torch.sum(logits,0)/logits.shape[0])
-        return dict({"logits": logits}  )
+
+        return dict({"logits": logits,"loss":loss}  )
 
 def build_textual_image_model(config: dict):
 
