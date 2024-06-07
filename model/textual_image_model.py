@@ -189,7 +189,8 @@ class DecoderLayer(nn.Module):
         y_after= self.ffn(yattn2)
         y_after = self.add_norm3(y_after,yattn2)
 
-        return y_after
+        return y_after *imgs_feat
+
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
@@ -297,17 +298,17 @@ class Textual_Image_Model(nn.Module):
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         real_texts_feat = texts_feat.clone()
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
-        hidden_feat = texts_feat.clone()
+        # hidden_feat = texts_feat.clone()
         # check_hidden_feat = texts_feat.clone()
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
-        hidden_feat = self.decoder_embedding(hidden_feat)
+        # hidden_feat = self.decoder_embedding(hidden_feat)
         # 3. Enhance Image and Text Features
         imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat.permute(1,0,2),texts_feat.permute(1,0,2))
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat)
+        decoder_feats = self.decoder_layer(texts_feat,imgs_feat,texts_feat)
 
         # 4. Contrastive Loss
         loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
