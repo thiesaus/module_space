@@ -159,7 +159,7 @@ class ContrastiveLoss(nn.Module):
             output2 (torch.Tensor): Feature embeddings for the second input.
             target (torch.Tensor): Binary label indicating whether the inputs are similar (1) or dissimilar (0).
         """
-        distance = 1 - CosineSimilarity.forward(output1, output2,device=output1.device)
+        distance =  CosineSimilarity.forward(output1, output2,device=output1.device)
         loss_contrastive = torch.mean((1 - target) * torch.pow(distance, 2) +
                                      (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         return loss_contrastive
@@ -211,7 +211,7 @@ class Textual_Image_Model(nn.Module):
         self.position_embedding_text = build(self.encoder_dim)
         self.fusion_image_layer = FusionLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
         self.constrasive_loss = ContrastiveLoss()
-        self.alpha = nn.Parameter(torch.tensor(0.5),requires_grad=True)
+        self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
         self.decoder_layer = DecoderLayer(self.encoder_dim)
@@ -259,16 +259,14 @@ class Textual_Image_Model(nn.Module):
         decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat)
 
         # 4. Contrastive Loss
-        loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
-
-        decoder_feats = decoder_feats.permute(1,0,2)
+        # loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
 
         # 5. Cosine Similarity
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device)
+        logits = CosineSimilarity.forward(texts_feat.permute(1,0,2), decoder_feats.permute(1,0,2),device=self.device)
         logits = logits.view(n,m)
         logits=self.alpha*( torch.sum(logits,0)/logits.shape[0])
 
-        return dict({"logits": logits,"loss":loss}  )
+        return dict({"logits": logits}  )
 
 def build_textual_image_model(config: dict):
 
