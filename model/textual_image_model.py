@@ -247,7 +247,7 @@ class Textual_Image_Model(nn.Module):
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
         hidden_feat = texts_feat.clone()
-        check_hidden_feat = texts_feat.clone()
+        # check_hidden_feat = texts_feat.clone()
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
@@ -259,14 +259,14 @@ class Textual_Image_Model(nn.Module):
         decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat)
 
         # 4. Contrastive Loss
-        # loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
+        loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
 
         # 5. Cosine Similarity
         logits = CosineSimilarity.forward(texts_feat.permute(1,0,2), decoder_feats.permute(1,0,2),device=self.device)
         logits = logits.view(n,m)
-        logits=self.alpha*( torch.sum(logits,0)/logits.shape[0])
+        logits= torch.sum(logits,0)/logits.shape[0]
 
-        return dict({"logits": logits}  )
+        return dict({"logits": logits,"loss":loss}  )
 
 def build_textual_image_model(config: dict):
 
