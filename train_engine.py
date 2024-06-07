@@ -80,7 +80,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="module_space", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"text_image_ffn_"+str(config["NUM_LAYERS"])+"_layers", 
+      name=f"text_dataloader_"+str(config["NUM_LAYERS"])+"_layers", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",

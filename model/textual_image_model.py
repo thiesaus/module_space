@@ -239,9 +239,9 @@ class Textual_Image_Model(nn.Module):
         
         # 1. Image Encoder
         imgs = rearrange(imgs, 'b n c h w -> (b n) c h w') #[bn,c,h,w]
-        norm_imgs=self.batch_norm2D(imgs)
-        norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
-        imgs_feat=self.images_encoder(norm_imgs).requires_grad_() # [ bn, 64, 768]
+        # norm_imgs=self.batch_norm2D(imgs)
+        # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
+        imgs_feat=self.images_encoder(imgs).requires_grad_() # [ bn, 64, 768]
         
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
