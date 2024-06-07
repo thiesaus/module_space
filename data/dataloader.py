@@ -450,7 +450,7 @@ def get_transform(mode, opt, idx):
             SquarePad(),
             T.Resize(opt["img_hw"][idx]),
             T.ToTensor(),
-            T.Normalize(opt["norm_mean"], opt['norm_std']),
+            # T.Normalize(opt["norm_mean"], opt['norm_std']),
         ])
     elif mode == 'unnorm':
         mean = opt["norm_mean"]
