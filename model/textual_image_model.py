@@ -47,7 +47,7 @@ class FeedForwardNetwork(nn.Module):
 
         # Apply the first linear layer and activation function
         ffn_output = self.linear1(x)
-        ffn_output = self.activation(ffn_output)
+        # ffn_output = self.activation(ffn_output)
 
         # Apply dropout
         ffn_output = self.dropout(ffn_output)
@@ -79,7 +79,7 @@ class FusionLayerBlock(nn.Module):
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
         self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.ffn = PositionWiseFFN(d_model, d_model)
+        self.ffn = FeedForwardNetwork(d_model)
         self.add_norm3 = AddNorm(d_model, dropout=dropout)
 
         # 2.Decoder layer
@@ -87,7 +87,7 @@ class FusionLayerBlock(nn.Module):
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
         self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm5 = AddNorm(d_model, dropout=dropout)
-        self.ffn2 = PositionWiseFFN(d_model, d_model)
+        self.ffn2 = FeedForwardNetwork(d_model)
         self.add_norm6 = AddNorm(d_model, dropout=dropout)
 
     def forward(self, x1,x2):
@@ -174,7 +174,7 @@ class DecoderLayer(nn.Module):
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
         self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.ffn = PositionWiseFFN(d_model, d_model)
+        self.ffn = FeedForwardNetwork(d_model)
         self.add_norm3 = AddNorm(d_model, dropout=dropout)
     def forward(self,x,imgs_feat,text_feat):
         y,_= self.self_attn(x,x,x)
