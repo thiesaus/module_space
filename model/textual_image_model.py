@@ -196,7 +196,7 @@ class DecoderLayer(nn.Module):
         y_after= self.ffn(yattn2)
         y_after = self.add_norm4(y_after,yattn2)
 
-        return y_after * imgs_feat
+        return y_after * text_feat
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
@@ -270,7 +270,7 @@ class Textual_Image_Model(nn.Module):
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
         texts_feat = self.text_projection(texts_feat)
-        # check_hidden_feat = texts_feat.clone()
+        check_hidden_feat = texts_feat.clone()
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
@@ -290,7 +290,7 @@ class Textual_Image_Model(nn.Module):
         # real_texts_feat = self.text_pooling(rearrange(real_texts_feat,"b l c -> b c l"), m)
 
         # 5. Cosine Similarity
-        logits = CosineSimilarity.forward(texts_feat.permute(1,0,2), decoder_feats.permute(1,0,2),device=self.device)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats.permute(1,0,2),device=self.device)
         logits = logits.view(n,m)
         logits= torch.sum(logits,0)/logits.shape[0]
 
