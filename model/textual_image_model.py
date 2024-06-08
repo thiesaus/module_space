@@ -176,8 +176,10 @@ class DecoderLayer(nn.Module):
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
         self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
+        self.text_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.add_norm3 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
-        self.add_norm3 = AddNorm(d_model, dropout=dropout)
+        self.add_norm4 = AddNorm(d_model, dropout=dropout)
     def forward(self,x,imgs_feat,text_feat):
         y,_= self.self_attn(x,x,x)
         y = self.add_norm1(y,x)
@@ -185,7 +187,7 @@ class DecoderLayer(nn.Module):
         yattn,_= self.image_cross_attn(y,imgs_feat,imgs_feat)
         yattn = self.add_norm2(yattn,y)
 
-        yattn2,_= self.image_cross_attn(yattn,text_feat,text_feat)
+        yattn2,_= self.text_cross_attn(yattn,text_feat,text_feat)
         yattn2 = self.add_norm2(yattn2,yattn)
 
         y_after= self.ffn(yattn2)
