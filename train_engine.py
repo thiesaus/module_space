@@ -80,7 +80,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="module_space", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"text_batch_"+str(config["NUM_LAYERS"])+"_layers", 
+      name=f"trienvong_"+str(config["NUM_LAYERS"])+"_layers", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -286,10 +286,13 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         #     continue
         expression = data['target_expressions']
         expression_ids = data['expression_id'].to(device)
+        targets = data['target_labels'].view(-1).to(device)
+
         # forward
         inputs = dict(
             local_images=data['cropped_images'].to(device),
             global_image=data['global_images'].to(device),
+            labels=targets,
             sentences=expression,
         )
         iter_start_timestamp = time.time()
@@ -301,8 +304,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         # loss_dict,log_dict=criterion.get_loss_and_log()
         logits = model_outputs['logits']
         contrastive_loss = model_outputs['loss']
-        targets = data['target_labels'].view(-1).to(logits.device)
-        loss =sim_loss(logits, targets)
+        loss =sim_loss(logits, targets) + contrastive_loss
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())

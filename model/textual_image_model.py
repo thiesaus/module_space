@@ -124,35 +124,40 @@ class CosineSimilarity(nn.Module):
         pass
 
     @staticmethod
-    def forward(x1, x2,device):
+    def forward(x1, x2,n,device):
         """
         Args:
             x1 (torch.Tensor): .
             x2 (torch.Tensor): Second input tensor.
         """
-        batch_size,length, _ = x1.size()
+        batch_size = int(x1.size(0)/n)
         result = torch.zeros(batch_size,device=device)
+        count=0
         for i in range(batch_size):
-            _x1 = rearrange(x1[i], 'l c -> (l c)')
-            _x2 = rearrange(x2[i], 'l c -> (l c)')
-            result[i] = F.cosine_similarity(_x1, _x2, dim=-1)
-        
+            for j in range(n):
+                a= rearrange(x1[count],"l c -> (l c)")
+                b= rearrange(x2[count],"l c -> (l c)")
+                result[i] += F.cosine_similarity(a, b, dim=-1)
+                count+=1
+            result[i] = result[i]/n
         return result
 
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=0.5):
+    def __init__(self, margin=1.0):
         super(ContrastiveLoss, self).__init__()
         self.margin = margin
 
-    def forward(self, output1, output2, target):
+    def forward(self, output1, output2, target,n=1):
         """
         Args:
             output1 (torch.Tensor): Feature embeddings for the first input.
             output2 (torch.Tensor): Feature embeddings for the second input.
             target (torch.Tensor): Binary label indicating whether the inputs are similar (1) or dissimilar (0).
         """
-        distance =  CosineSimilarity.forward(output1, output2,device=output1.device)
+        distance =  CosineSimilarity.forward(output1, output2,n,device=output1.device)
+        distance =  (distance +1) /2
+ 
         loss_contrastive = torch.mean((1 - target) * torch.pow(distance, 2) +
                                      (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         return loss_contrastive
@@ -279,6 +284,7 @@ class Textual_Image_Model(nn.Module):
         #      "sentences": List[m]}
         imgs= x['local_images']  #[b,n,c,h,w]
         texts = x['sentences']
+        labels = x['labels']
         b,n = imgs.size()[:2]
         m = len(texts)
         
@@ -291,8 +297,10 @@ class Textual_Image_Model(nn.Module):
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
         texts_feat = self.text_projection(texts_feat)
+        texts_feat = texts_feat.unsqueeze(0)
+        texts_feat= texts_feat.repeat(n,1,1,1)
+        texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
         check_hidden_feat = texts_feat.clone()
-        texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
@@ -305,18 +313,18 @@ class Textual_Image_Model(nn.Module):
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
 
         # 4. Contrastive Loss
-        loss=self.constrasive_loss(texts_feat,decoder_feats,torch.zeros(n*m).to(self.device) + 0.1)
+        loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
 
         # 5. decoder Projection
-        decoder_feats = self.st_pooling(rearrange(decoder_feats,"b l c -> b c l"), b)
-        check_hidden_feat = self.ts_pooling(rearrange(check_hidden_feat,"b l c -> b c l"), b)
+        # decoder_feats = self.st_pooling(rearrange(decoder_feats,"b l c -> b c l"), b)
+        # check_hidden_feat = self.ts_pooling(rearrange(check_hidden_feat,"b l c -> b c l"), b)
 
         # # 5. Cosine Similarity
-        # logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
         # logits = logits.view(n,m)
         # logits= torch.sum(logits,0)/logits.shape[0]
 
-        logits= F.cosine_similarity(check_hidden_feat, decoder_feats, dim=-1)
+        # logits= F.cosine_similarity(check_hidden_feat, decoder_feats, dim=-1)
 
         return dict({"logits": logits,"loss":loss}  )
 
