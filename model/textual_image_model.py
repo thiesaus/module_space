@@ -98,7 +98,7 @@ class FusionLayerBlock(nn.Module):
 
         # cross attention
         y2attn,_= self.cross_attn2(y2,y1,y1)
-        y2attn = self.add_norm5(y2attn,y1)
+        y2attn = self.add_norm5(y2attn,y2)
 
         y2_after= self.ffn2(y2attn)
         y2_after = self.add_norm6(y2_after,y2attn)
@@ -236,7 +236,7 @@ class Textual_Image_Model(nn.Module):
         self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.decoder_layer = DecoderLayer(self.encoder_dim,1,self.device)
         self.decoder_embedding =build(self.encoder_dim)
         
         self.img_fc = self.get_img_fc()
