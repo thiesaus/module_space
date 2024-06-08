@@ -137,7 +137,7 @@ class CosineSimilarity(nn.Module):
             for j in range(n):
                 a= rearrange(x1[count],"l c -> (l c)")
                 b= rearrange(x2[count],"l c -> (l c)")
-                result[i] += F.cosine_similarity(a, b, dim=-1)
+                result[i] = result[i] + F.cosine_similarity(a, b, dim=-1)
                 count+=1
             result[i] = result[i]/n
         return result
