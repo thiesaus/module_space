@@ -298,6 +298,7 @@ class Textual_Image_Model(nn.Module):
         # norm_imgs=self.batch_norm2D(imgs)
         # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
         imgs_feat=self.images_encoder(imgs).requires_grad_() # [ bn, 64, 768]
+        hidden_feat = imgs_feat.clone()
         
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
@@ -307,12 +308,12 @@ class Textual_Image_Model(nn.Module):
         texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
         check_hidden_feat = texts_feat.clone()
 
+        hidden_feat = self.decoder_embedding(hidden_feat)
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
-        hidden_feat = imgs_feat.clone()
-        hidden_feat = self.decoder_embedding(hidden_feat)
+      
         # 3. Enhance Image and Text Features
-        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
 
         # 4. Decoder Layer
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
