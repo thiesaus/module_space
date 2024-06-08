@@ -185,7 +185,7 @@ class DecoderLayerBlock(nn.Module):
         y_after= self.ffn(yattn2)
         y_after = self.add_norm4(y_after,yattn2)
 
-        return y_after * text_feat
+        return y_after 
     
 class DecoderLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
