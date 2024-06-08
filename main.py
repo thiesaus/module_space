@@ -35,6 +35,7 @@ if __name__ == "__main__":
     config["sample_frame_stride"]=4
     config["track_root"]=""
     config["NUM_LAYERS"]=4
+    config["TEST_DIST"]=1
     # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 

@@ -79,7 +79,7 @@ class FusionLayerBlock(nn.Module):
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
         self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.ffn = FeedForwardNetwork(d_model)
+
         self.add_norm3 = AddNorm(d_model, dropout=dropout)
 
         # 2.Decoder layer
@@ -87,8 +87,9 @@ class FusionLayerBlock(nn.Module):
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
         self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
         self.add_norm5 = AddNorm(d_model, dropout=dropout)
-        self.ffn2 = FeedForwardNetwork(d_model)
         self.add_norm6 = AddNorm(d_model, dropout=dropout)
+        self.ffn = FeedForwardNetwork(d_model)
+        self.ffn2 = FeedForwardNetwork(d_model)
 
     def forward(self, x1,x2):
         y1,_= self.self_attn(x1,x1,x1)
@@ -99,9 +100,11 @@ class FusionLayerBlock(nn.Module):
         y2 = self.add_norm4(y2,x2)
 
         y2attn,_= self.cross_attn2(y2,y1,y1)
+        y2attn = y2attn + y1
         y2attn = self.add_norm5(y2attn,y2)
 
         y1attn,_= self.cross_attn(y1,y2,y2)
+        y1attn = y1attn + y2
         y1attn = self.add_norm2(y1attn,y1)
 
         y2_after= self.ffn2(y2attn)
@@ -163,6 +166,7 @@ class ContrastiveLoss(nn.Module):
         loss_contrastive = torch.mean((1 - target) * torch.pow(distance, 2) +
                                      (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         return loss_contrastive
+    
 class DecoderLayer(nn.Module):
     def __init__(self,d_model, n_heads=8, dropout=0.1):
         super(DecoderLayer, self).__init__()
@@ -189,7 +193,7 @@ class DecoderLayer(nn.Module):
         y_after= self.ffn(yattn2)
         y_after = self.add_norm3(y_after,yattn2)
 
-        return y_after
+        return y_after * imgs_feat
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
@@ -205,7 +209,7 @@ class Textual_Image_Model(nn.Module):
         #text encoder
         self.text_tokenizer =RobertaTokenizerFast.from_pretrained("FacebookAI/roberta-base")
         self.bert_model=RobertaModel.from_pretrained("FacebookAI/roberta-base")
-
+        self.text_projection = self.get_text_fc()
         #Image  Fusion Attention
         self.position_embedding_image = build(self.encoder_dim)
         self.position_embedding_text = build(self.encoder_dim)
@@ -216,10 +220,8 @@ class Textual_Image_Model(nn.Module):
         # Image Decoder Layer
         self.decoder_layer = DecoderLayer(self.encoder_dim)
         self.decoder_embedding =build(self.encoder_dim)
+        
 
-        # Image Projection
-        self.img_fc = self.get_img_fc(use_ln=False)
-        self.text_fc = self.get_text_fc(use_ln=False)
     def get_img_fc(self, use_ln=True):
         if use_ln:
             return nn.Sequential(
@@ -229,20 +231,12 @@ class Textual_Image_Model(nn.Module):
         else:
             return nn.Linear(self.encoder_dim, 1024)
 
-    def get_text_fc(self, use_ln=True):
-        if use_ln:
-            return nn.Sequential(
-                nn.Linear(self.encoder_dim, self.encoder_dim),
-                nn.ReLU(),
-                nn.Linear(self.encoder_dim, 1024),
-                nn.LayerNorm(1024, eps=1e-12),
-            )
-        else:
-            return nn.Sequential(
-                nn.Linear(self.encoder_dim, self.encoder_dim),
-                nn.ReLU(),
-                nn.Linear(self.encoder_dim, 1024),
-            )
+    def get_text_fc(self):
+        return nn.Sequential(
+            nn.Linear(self.encoder_dim, 1024),
+            nn.ReLU(),
+            nn.Linear(1024,self.encoder_dim),
+        )
             
     def images_encoder(self,images):
         inputs = self.image_processor(images, return_tensors="pt",do_rescale=False).to(self.device)
@@ -254,30 +248,6 @@ class Textual_Image_Model(nn.Module):
         tokenizer_input = {k: inputs[k] for k in ['input_ids', 'attention_mask']}
         outputs = self.bert_model(**tokenizer_input)
         return outputs.last_hidden_state
-
-    def st_pooling(self, feat, bs):
-        # spatial pooling
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()   # [bt,c,l]->[bt,c]
-    
-        # temporal pooling
-        feat = rearrange(feat, '(b t) c -> b c t', b=bs)
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze() 
-
-        # projection
-        feat = self.img_fc(feat)
-        return feat
-
-    def text_pooling(self, feat, bs):
-        # spatial pooling
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()   # [bt,c,l]->[bt,c]
-    
-        # temporal pooling
-        feat = rearrange(feat, '(b t) c -> b c t', b=bs)
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze() 
-
-        # projection
-        feat = self.text_fc(feat)
-        return feat
 
     def forward(self,x):
         # x = {"local_images": PIL.Image[n],
@@ -295,8 +265,8 @@ class Textual_Image_Model(nn.Module):
         
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
-        real_texts_feat = texts_feat.clone()
         texts_feat=repeat(texts_feat, 'm l c -> (repeat m) l c', repeat=n)
+        texts_feat = self.text_projection(texts_feat)
         hidden_feat = texts_feat.clone()
         # check_hidden_feat = texts_feat.clone()
 
@@ -307,18 +277,19 @@ class Textual_Image_Model(nn.Module):
         imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat.permute(1,0,2),texts_feat.permute(1,0,2))
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat)
+        decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat) 
 
         # 4. Contrastive Loss
         loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
 
         # 5. decoder Projection
-        decoder_feats = self.st_pooling(rearrange(decoder_feats,"l b c -> b c l"), b)
-        real_texts_feat = self.text_pooling(rearrange(real_texts_feat,"b l c -> b c l"), m)
-
+        # decoder_feats = self.st_pooling(rearrange(decoder_feats,"l b c -> b c l"), b)
+        # real_texts_feat = self.text_pooling(rearrange(real_texts_feat,"b l c -> b c l"), m)
 
         # 5. Cosine Similarity
-        logits = F.cosine_similarity(decoder_feats, real_texts_feat, dim=-1)
+        logits = CosineSimilarity.forward(texts_feat.permute(1,0,2), decoder_feats.permute(1,0,2),device=self.device)
+        logits = logits.view(n,m)
+        logits= torch.sum(logits,0)/logits.shape[0]
 
         return dict({"logits": logits,"loss":loss}  )
 
