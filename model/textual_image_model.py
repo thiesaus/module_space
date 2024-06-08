@@ -58,22 +58,22 @@ class PositionWiseFFN(nn.Module):  #@save
         return self.dense2(self.relu(self.dense1(X)))
 
 class FusionLayerBlock(nn.Module):
-    def __init__(self, d_model, n_heads=8, dropout=0.1):
+    def __init__(self, d_model, n_heads=8, dropout=0.1,batch_first=True):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
         self.add_norm3 = AddNorm(d_model, dropout=dropout)
 
         # 2.Decoder layer
-        self.self_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.self_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm5 = AddNorm(d_model, dropout=dropout)
         self.add_norm6 = AddNorm(d_model, dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
@@ -158,17 +158,17 @@ class ContrastiveLoss(nn.Module):
         return loss_contrastive
     
 class DecoderLayerBlock(nn.Module):
-    def __init__(self,d_model, n_heads=8, dropout=0.1):
+    def __init__(self,d_model, n_heads=8, dropout=0.1,batch_first=True):
         super(DecoderLayerBlock, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.text_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.text_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm3 = AddNorm(d_model,  dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
@@ -279,20 +279,20 @@ class Textual_Image_Model(nn.Module):
         hidden_feat = imgs_feat.clone()
         hidden_feat = self.decoder_embedding(hidden_feat)
         # 3. Enhance Image and Text Features
-        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat.permute(1,0,2),texts_feat.permute(1,0,2))
+        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer(hidden_feat.permute(1,0,2),imgs_feat,texts_feat) 
+        decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
 
         # 4. Contrastive Loss
-        loss=self.constrasive_loss(texts_feat.permute(1,0,2),decoder_feats.permute(1,0,2),torch.zeros(n*m).to(self.device) + 0.1)
+        loss=self.constrasive_loss(texts_feat,decoder_feats,torch.zeros(n*m).to(self.device) + 0.1)
 
         # 5. decoder Projection
         # decoder_feats = self.st_pooling(rearrange(decoder_feats,"l b c -> b c l"), b)
         # real_texts_feat = self.text_pooling(rearrange(real_texts_feat,"b l c -> b c l"), m)
 
         # 5. Cosine Similarity
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats.permute(1,0,2),device=self.device)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device)
         logits = logits.view(n,m)
         logits= torch.sum(logits,0)/logits.shape[0]
 
