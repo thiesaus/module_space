@@ -12,7 +12,8 @@ from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
 # from model.model4 import Model4,build_model4
 # from model.model5 import Model5,build_model5
-from model.textual_image_model import Textual_Image_Model,build_textual_image_model
+# from model.textual_image_model import Textual_Image_Model,build_textual_image_model
+from model.enrich_model import EnrichModel,build_enrich
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
 from model.criterion import ModuleCriterion,build_criterion
@@ -37,7 +38,7 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_textual_image_model(config=config)
+    model = build_enrich(config=config)
     
 
     # Load Pretrained Model
@@ -81,7 +82,7 @@ def train(config: dict):
         # Set the project where this run will be logged
         project="module_space", 
         # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-        name=f"correct_emb_"+str(config["NUM_LAYERS"])+"_layers", 
+        name=f"enrich_"+str(config["NUM_LAYERS"])+"_layers", 
         # Track hyperparameters and run metadata
         config={
         "architecture": "Transformer",
@@ -247,7 +248,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: float,
+def train_one_epoch(model: EnrichModel, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
@@ -368,7 +369,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
     output_dict["metric_log"]=dict(loss=metric_log.get_avg())
     return output_dict
 
-def test_one_epoch(model:Textual_Image_Model,dataloader_test: DataLoader,epoch):
+def test_one_epoch(model:EnrichModel,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()
     # if (epoch + 1) % 1 == 0:
     p, r = test_accuracy(model, dataloader_test)
