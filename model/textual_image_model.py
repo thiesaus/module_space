@@ -57,6 +57,37 @@ class PositionWiseFFN(nn.Module):  #@save
     def forward(self, X):
         return self.dense2(self.relu(self.dense1(X)))
 
+class EnrichBlock(nn.Module):
+    def __init__(self,d_model, n_heads=8, dropout=0.1,batch_first=True):
+        super(EnrichBlock, self).__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+
+        # 1.Encoder layer
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.add_norm1 = AddNorm(d_model, dropout=dropout)
+        self.ffn = FeedForwardNetwork(d_model)
+        self.add_norm3 = AddNorm(d_model, dropout=dropout)
+    
+    def forward(self,x):
+        y,_= self.self_attn(x,x,x)
+        y = self.add_norm1(y,x)
+        y_after= self.ffn(y)
+        y_after = self.add_norm3(y_after,y)
+        return y_after
+
+class EnrichLayer(nn.Module):
+    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
+        super(EnrichLayer, self).__init__()
+        self.device=device
+        self.d_model=d_model
+        self.num_layer=num_layer
+        self.enrichlayer= nn.ModuleList([EnrichBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+    
+    def forward(self,x):
+        for i in range(self.num_layer):
+            x = self.enrichlayer[i](x)
+        return x
 class FusionLayerBlock(nn.Module):
     def __init__(self, d_model, n_heads=8, dropout=0.1,batch_first=True):
         super().__init__()
@@ -116,7 +147,7 @@ class FusionLayer(nn.Module):
     
     def forward(self,x1,x2):
         for i in range(self.num_layer):
-            x1,x2 = self.fusionlayer[i](x1,x2)
+            x2,x1 = self.fusionlayer[i](x1,x2)
         return x1,x2
 
 class CosineSimilarity(nn.Module):
@@ -215,6 +246,10 @@ class Textual_Image_Model(nn.Module):
         super(Textual_Image_Model, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.encoder_dim = 768
+        self.num_encoder_layer=config["NUM_LAYERS"][0]
+        self.num_image_layer=config["NUM_LAYERS"][1]
+        self.num_text_layer=config["NUM_LAYERS"][2]
+        self.num_decoder_layer=config["NUM_LAYERS"][3]
 
         #image encoder
         self.image_processor =  AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
@@ -228,11 +263,16 @@ class Textual_Image_Model(nn.Module):
         #Image  Fusion Attention
         self.position_embedding_image = build(self.encoder_dim)
         self.position_embedding_text = build(self.encoder_dim)
-        self.fusion_image_layer = FusionLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.fusion_image_layer = FusionLayer(self.encoder_dim,self.num_encoder_layer,self.device)
         self.constrasive_loss = ContrastiveLoss()
 
+        #enrich layer
+        self.enrich_image_layer = EnrichLayer(self.encoder_dim,self.num_image_layer,self.device)
+        self.enrich_text_layer = EnrichLayer(self.encoder_dim,self.num_text_layer,self.device)
+
+
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.decoder_layer = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
         self.decoder_embedding =build(self.encoder_dim)
         
         self.img_fc = self.get_img_fc()
@@ -314,6 +354,9 @@ class Textual_Image_Model(nn.Module):
       
         # 3. Enhance Image and Text Features
         imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        # 3.1 Enrich Layer
+        imgs_feat = self.enrich_image_layer(imgs_feat)
+        texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
