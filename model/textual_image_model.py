@@ -131,7 +131,7 @@ class CosineSimilarity(nn.Module):
             x2 (torch.Tensor): Second input tensor.
         """
         batch_size = int(x1.size(0)/n)
-        result = torch.zeros(batch_size,device=device)
+        result = torch.zeros(batch_size,device=device,requires_grad=True)
         count=0
         for i in range(batch_size):
             for j in range(n):

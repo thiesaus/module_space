@@ -76,16 +76,17 @@ def train(config: dict):
     # Optimizer
     param_groups, lr_names = get_param_groups(config=config, model=model)
     optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
-    wandb.init(
-      # Set the project where this run will be logged
-      project="module_space", 
-      # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"trienvong_"+str(config["NUM_LAYERS"])+"_layers", 
-      # Track hyperparameters and run metadata
-      config={
-      "architecture": "Transformer",
-      "epochs": 500,
-      })
+    if config["WANDB"]:
+        wandb.init(
+        # Set the project where this run will be logged
+        project="module_space", 
+        # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
+        name=f"trienvong_"+str(config["NUM_LAYERS"])+"_layers", 
+        # Track hyperparameters and run metadata
+        config={
+        "architecture": "Transformer",
+        "epochs": 500,
+        })
   
     # Scheduler
     if config["LR_SCHEDULER"] == "MultiStep":
@@ -176,7 +177,8 @@ def train(config: dict):
         if (epoch+1) % config["TEST_DIST"] ==0:
             p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
             output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
-        wandb.log(output_dict)
+        if config["WANDB"]:
+            wandb.log(output_dict)
         scheduler.step()
 
         train_states["start_epoch"] += 1
@@ -193,7 +195,8 @@ def train(config: dict):
                 )
         # eval_model(model=model,visualizer=visualizer, dataloader=dataloader_test,epoch=epoch+1)
         # time.sleep(1) ## prevent slush
-    wandb.finish()
+    if config["WANDB"]:
+        wandb.finish()
     return
 
 def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[str]]:
