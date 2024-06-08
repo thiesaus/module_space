@@ -131,7 +131,7 @@ class CosineSimilarity(nn.Module):
             x2 (torch.Tensor): Second input tensor.
         """
         batch_size = int(x1.size(0)/n)
-        result = None
+        result = torch.tensor([],requires_grad=True,device=device)
         count=0
         for i in range(batch_size):
             temp=None
@@ -144,10 +144,7 @@ class CosineSimilarity(nn.Module):
                     temp = temp + F.cosine_similarity(a, b, dim=-1)
                 count+=1
             p = temp/n
-            if result is None:
-                result = p.unsqueeze(0)
-            else:
-                result = torch.cat((result,p.unsqueeze(0)),0)
+            result = torch.cat((result,p.unsqueeze(0)),0)
         return result
 
 
@@ -233,7 +230,6 @@ class Textual_Image_Model(nn.Module):
         self.position_embedding_text = build(self.encoder_dim)
         self.fusion_image_layer = FusionLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
         self.constrasive_loss = ContrastiveLoss()
-        self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
         self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
@@ -316,7 +312,7 @@ class Textual_Image_Model(nn.Module):
         hidden_feat = imgs_feat.clone()
         hidden_feat = self.decoder_embedding(hidden_feat)
         # 3. Enhance Image and Text Features
-        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
 
         # 4. Decoder Layer
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
