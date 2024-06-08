@@ -234,7 +234,7 @@ class Textual_Image_Model(nn.Module):
         self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.decoder_layer = DecoderLayer(self.encoder_dim,1,self.device)
         self.decoder_embedding =build(self.encoder_dim)
         
 

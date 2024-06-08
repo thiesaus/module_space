@@ -80,7 +80,7 @@ def train(config: dict):
       # Set the project where this run will be logged
       project="module_space", 
       # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-      name=f"text_encoder_"+str(config["NUM_LAYERS"])+"_layers", 
+      name=f"text_eli_loss_"+str(config["NUM_LAYERS"])+"_layers", 
       # Track hyperparameters and run metadata
       config={
       "architecture": "Transformer",
@@ -302,7 +302,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         logits = model_outputs['logits']
         contrastive_loss = model_outputs['loss']
         targets = data['target_labels'].view(-1).to(logits.device)
-        loss =sim_loss(logits, targets) + contrastive_loss
+        loss =sim_loss(logits, targets)
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
