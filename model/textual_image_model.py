@@ -57,6 +57,44 @@ class PositionWiseFFN(nn.Module):  #@save
     def forward(self, X):
         return self.dense2(self.relu(self.dense1(X)))
 
+
+class CausalSelfAttention(nn.Module):
+    def __init__(self, d_model, n_heads, dropout=0.1):
+        super(CausalSelfAttention, self).__init__()
+        assert d_model % n_heads == 0
+
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.d_k = d_model // n_heads
+
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+
+        self.attention = nn.functional.softmax
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()
+
+        # Project the input into queries, keys, and values
+        q = self.W_q(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+        k = self.W_k(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+        v = self.W_v(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
+
+        # Compute the causal mask
+        mask = torch.tril(torch.ones(seq_len, seq_len,device=x.device)).unsqueeze(0).unsqueeze(0)
+
+        # Compute the scaled dot-product attention
+        scores = torch.matmul(q, k.transpose(-2, -1)) / (self.d_k ** 0.5)
+        scores = scores.masked_fill(mask == 0, -1e9)
+        attn = self.attention(scores, dim=-1)
+        attn = self.dropout(attn)
+
+        # Compute the output
+        out = torch.matmul(attn, v).transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+        return out
+
 class EnrichBlock(nn.Module):
     def __init__(self,d_model, n_heads=8, dropout=0.1,batch_first=True):
         super(EnrichBlock, self).__init__()
@@ -64,16 +102,24 @@ class EnrichBlock(nn.Module):
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.self_attn = CausalSelfAttention(d_model, n_heads, dropout=dropout)
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.ffn = FeedForwardNetwork(d_model)
+        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.add_norm2 = AddNorm(d_model, dropout=dropout)
+        self.cross_attn2= nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm3 = AddNorm(d_model, dropout=dropout)
+        self.ffn = FeedForwardNetwork(d_model)
+        self.add_norm4 = AddNorm(d_model, dropout=dropout)
     
-    def forward(self,x):
-        y,_= self.self_attn(x,x,x)
-        y = self.add_norm1(y,x)
-        y_after= self.ffn(y)
-        y_after = self.add_norm3(y_after,y)
+    def forward(self,x_q,x1,x2):
+        y= self.self_attn(x_q)
+        y = self.add_norm1(y,x_q)
+        yattn,_ =  self.cross_attn(y,x1,x1)
+        yattn = self.add_norm2(yattn,y)
+        yattn2,_ =  self.cross_attn(yattn,x2,x2)
+        yattn2 = self.add_norm2(yattn2,yattn)
+        y_after= self.ffn(yattn2)
+        y_after = self.add_norm3(y_after,yattn2)
         return y_after
 
 class EnrichLayer(nn.Module):
@@ -84,10 +130,13 @@ class EnrichLayer(nn.Module):
         self.num_layer=num_layer
         self.enrichlayer= nn.ModuleList([EnrichBlock(d_model,n_head,dropout) for _ in range(num_layer)])
     
-    def forward(self,x):
+    def forward(self,imgs_feat,text_feat):
+        output = text_feat.clone()
         for i in range(self.num_layer):
-            x = self.enrichlayer[i](x)
-        return x
+            output = self.enrichlayer[i](output,imgs_feat,text_feat)
+        return output
+    
+
 class FusionLayerBlock(nn.Module):
     def __init__(self, d_model, n_heads=8, dropout=0.1,batch_first=True):
         super().__init__()
@@ -143,11 +192,12 @@ class FusionLayer(nn.Module):
         self.device=device
         self.d_model=d_model
         self.num_layer=num_layer
+    
         self.fusionlayer= nn.ModuleList([FusionLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
     
     def forward(self,x1,x2):
         for i in range(self.num_layer):
-            x2,x1 = self.fusionlayer[i](x1,x2)
+            x1,x2 = self.fusionlayer[i](x1,x2)
         return x1,x2
 
 class CosineSimilarity(nn.Module):
@@ -247,9 +297,8 @@ class Textual_Image_Model(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.encoder_dim = 768
         self.num_encoder_layer=config["NUM_LAYERS"][0]
-        self.num_image_layer=config["NUM_LAYERS"][1]
-        self.num_text_layer=config["NUM_LAYERS"][2]
-        self.num_decoder_layer=config["NUM_LAYERS"][3]
+        self.num_enrich_layer=config["NUM_LAYERS"][1]
+        self.num_decoder_layer=config["NUM_LAYERS"][2]
 
         #image encoder
         self.image_processor =  AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
@@ -267,8 +316,8 @@ class Textual_Image_Model(nn.Module):
         self.constrasive_loss = ContrastiveLoss()
 
         #enrich layer
-        self.enrich_image_layer = EnrichLayer(self.encoder_dim,self.num_image_layer,self.device)
-        self.enrich_text_layer = EnrichLayer(self.encoder_dim,self.num_text_layer,self.device)
+        self.enrich_layer = EnrichLayer(self.encoder_dim,self.num_enrich_layer,self.device)
+        # self.enrich_text_layer = EnrichLayer(self.encoder_dim,self.num_text_layer,self.device)
 
 
         # Image Decoder Layer
@@ -348,15 +397,14 @@ class Textual_Image_Model(nn.Module):
         texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
         check_hidden_feat = texts_feat.clone()
 
-        hidden_feat = self.decoder_embedding(hidden_feat)
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
       
         # 3. Enhance Image and Text Features
         imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         # 3.1 Enrich Layer
-        imgs_feat = self.enrich_image_layer(imgs_feat)
-        texts_feat = self.enrich_text_layer(texts_feat)
+        hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
+        # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
