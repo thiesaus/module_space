@@ -28,7 +28,7 @@ class PositionEmbeddingSinCos(nn.Module):
         output = x.permute(1, 0, 2)
         output = output + self.pe[:output.size(0)]
         y= self.dropout(output)
-        return y.permute(1, 0, 2).detach()
+        return y.permute(1, 0, 2)
         
         
 
