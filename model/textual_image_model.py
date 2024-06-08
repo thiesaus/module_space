@@ -168,9 +168,9 @@ class ContrastiveLoss(nn.Module):
                                      (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
         return loss_contrastive
     
-class DecoderLayer(nn.Module):
+class DecoderLayerBlock(nn.Module):
     def __init__(self,d_model, n_heads=8, dropout=0.1):
-        super(DecoderLayer, self).__init__()
+        super(DecoderLayerBlock, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
 
@@ -197,6 +197,19 @@ class DecoderLayer(nn.Module):
         y_after = self.add_norm4(y_after,yattn2)
 
         return y_after * text_feat
+    
+class DecoderLayer(nn.Module):
+    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
+        super(DecoderLayer, self).__init__()
+        self.device=device
+        self.d_model=d_model
+        self.num_layer=num_layer
+        self.decoderlayer= nn.ModuleList([DecoderLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+    
+    def forward(self,x,imgs_feat,text_feat):
+        for i in range(self.num_layer):
+            x = self.decoderlayer[i](x,imgs_feat,text_feat)
+        return x
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
@@ -221,7 +234,7 @@ class Textual_Image_Model(nn.Module):
         self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim)
+        self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
         self.decoder_embedding =build(self.encoder_dim)
         
 
