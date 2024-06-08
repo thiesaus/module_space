@@ -95,6 +95,10 @@ class FusionLayerBlock(nn.Module):
         y1,_= self.self_attn(x1,x1,x1)
         y1 = self.add_norm1(y1,x1)
 
+         # self attention
+        y2,_= self.self_attn2(x2,x2,x2)
+        y2 = self.add_norm4(y2,x2)
+
         # cross attention
         y1attn,_= self.cross_attn(y2,y1,y1)
         y1attn = self.add_norm2(y1attn,y2)
@@ -102,9 +106,6 @@ class FusionLayerBlock(nn.Module):
         y1_after= self.ffn(y1attn)
         y1_after = self.add_norm3(y1_after,y1attn)
 
-        # self attention
-        y2,_= self.self_attn2(x2,x2,x2)
-        y2 = self.add_norm4(y2,x2)
 
         # cross attention
         y2attn,_= self.cross_attn2(y1,y2,y2)
