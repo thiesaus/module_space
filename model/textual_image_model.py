@@ -131,15 +131,23 @@ class CosineSimilarity(nn.Module):
             x2 (torch.Tensor): Second input tensor.
         """
         batch_size = int(x1.size(0)/n)
-        result = torch.zeros(batch_size,device=device,requires_grad=True)
+        result = None
         count=0
         for i in range(batch_size):
+            temp=None
             for j in range(n):
                 a= rearrange(x1[count],"l c -> (l c)")
                 b= rearrange(x2[count],"l c -> (l c)")
-                result[i] = result[i] + F.cosine_similarity(a, b, dim=-1)
+                if temp is None:
+                    temp = F.cosine_similarity(a, b, dim=-1)
+                else:
+                    temp = temp + F.cosine_similarity(a, b, dim=-1)
                 count+=1
-            result[i] = result[i]/n
+            p = temp/n
+            if result is None:
+                result = p.unsqueeze(0)
+            else:
+                result = torch.cat((result,p.unsqueeze(0)),0)
         return result
 
 
