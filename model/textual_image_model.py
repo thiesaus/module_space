@@ -291,6 +291,30 @@ class DecoderLayer(nn.Module):
             x = self.decoderlayer[i](x,imgs_feat,text_feat)
         return x
 
+class SingleAttention(nn.Module):
+    def __init__(self,d_model,n_heads=8,batch_first=True,dropout=0.1):
+        super(SingleAttention, self).__init__()
+        self.d_model = d_model
+        self.n_heads = n_heads
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.add_norm1 = AddNorm(d_model, dropout=dropout)
+        self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.add_norm2 = AddNorm(d_model, dropout=dropout)
+       
+        self.ffn = FeedForwardNetwork(d_model)
+        self.add_norm4 = AddNorm(d_model, dropout=dropout)
+    def forward(self,x,y1):
+        y,_= self.self_attn(x,x,x)
+        y = self.add_norm1(y,x)
+
+        yattn,_= self.image_cross_attn(y,y1,y1)
+        yattn = self.add_norm2(yattn,y)
+
+        y_after= self.ffn(yattn)
+        y_after = self.add_norm4(y_after,yattn)
+
+        return y_after
+
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
         super(Textual_Image_Model, self).__init__()
@@ -316,13 +340,15 @@ class Textual_Image_Model(nn.Module):
         self.constrasive_loss = ContrastiveLoss()
 
         #enrich layer
-        self.enrich_layer = EnrichLayer(self.encoder_dim,self.num_enrich_layer,self.device)
+        # self.enrich_layer = EnrichLayer(self.encoder_dim,self.num_enrich_layer,self.device)
         # self.enrich_text_layer = EnrichLayer(self.encoder_dim,self.num_text_layer,self.device)
 
 
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
-        self.decoder_embedding =build(self.encoder_dim)
+        self.decoder_layer1 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
+        self.decoder_layer2 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
+
+        self.decoder= SingleAttention(self.encoder_dim)
         
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
@@ -387,7 +413,6 @@ class Textual_Image_Model(nn.Module):
         # norm_imgs=self.batch_norm2D(imgs)
         # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
         imgs_feat=self.images_encoder(imgs).requires_grad_() # [ bn, 64, 768]
-        hidden_feat = imgs_feat.clone()
         
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
@@ -399,15 +424,22 @@ class Textual_Image_Model(nn.Module):
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
-      
+        imgs_feat_clone = imgs_feat.clone()
+        texts_feat_clone = texts_feat.clone()
         # 3. Enhance Image and Text Features
         imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         # 3.1 Enrich Layer
-        hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
+        # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
+        decoder_feats_images = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
+        decoder_feats_texts = self.decoder_layer2(texts_feat_clone,imgs_feat,texts_feat)
+
+        # 5. Decoder
+        decoder_feats = self.decoder(decoder_feats_images,decoder_feats_texts) * texts_feat
+
+
         logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
 
         # 4. Contrastive Loss
