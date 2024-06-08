@@ -310,7 +310,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        output_dict["train"]=dict(epoch=epoch,loss=loss.item())
+        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss.item())
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
