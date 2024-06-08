@@ -284,7 +284,8 @@ class Textual_Image_Model(nn.Module):
         #      "sentences": List[m]}
         imgs= x['local_images']  #[b,n,c,h,w]
         texts = x['sentences']
-        labels = x['labels']
+        if self.training:
+            labels = x['labels']
         b,n = imgs.size()[:2]
         m = len(texts)
         
@@ -311,22 +312,15 @@ class Textual_Image_Model(nn.Module):
 
         # 4. Decoder Layer
         decoder_feats = self.decoder_layer(hidden_feat,imgs_feat,texts_feat) 
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
 
         # 4. Contrastive Loss
-        loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
+        if self.training:
+            loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
+            return dict({"logits": logits,"loss":loss}  )
+        else:
+            return dict({"logits": logits})
 
-        # 5. decoder Projection
-        # decoder_feats = self.st_pooling(rearrange(decoder_feats,"b l c -> b c l"), b)
-        # check_hidden_feat = self.ts_pooling(rearrange(check_hidden_feat,"b l c -> b c l"), b)
-
-        # # 5. Cosine Similarity
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
-        # logits = logits.view(n,m)
-        # logits= torch.sum(logits,0)/logits.shape[0]
-
-        # logits= F.cosine_similarity(check_hidden_feat, decoder_feats, dim=-1)
-
-        return dict({"logits": logits,"loss":loss}  )
 
 def build_textual_image_model(config: dict):
 
