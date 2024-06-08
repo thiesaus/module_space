@@ -15,17 +15,6 @@ class AddNorm(nn.Module):
 
     def forward(self, X, Y):
         return self.layer_norm(self.dropout(Y) + X)
-class LayerNormalization(nn.Module):
-    def __init__(self, eps=1e-6):
-        super(LayerNormalization, self).__init__()
-        self.eps = eps
-        self.gamma = nn.Parameter(torch.ones(1))
-        self.beta = nn.Parameter(torch.zeros(1))
-
-    def forward(self, x):
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 
 class FeedForwardNetwork(nn.Module):
@@ -47,7 +36,7 @@ class FeedForwardNetwork(nn.Module):
 
         # Apply the first linear layer and activation function
         ffn_output = self.linear1(x)
-        # ffn_output = self.activation(ffn_output)
+        ffn_output = self.activation(ffn_output)
 
         # Apply dropout
         ffn_output = self.dropout(ffn_output)
@@ -229,12 +218,12 @@ class Textual_Image_Model(nn.Module):
         #Image  Fusion Attention
         self.position_embedding_image = build(self.encoder_dim)
         self.position_embedding_text = build(self.encoder_dim)
-        self.fusion_image_layer = FusionLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
+        self.fusion_image_layer = FusionLayer(self.encoder_dim,1,self.device)
         self.constrasive_loss = ContrastiveLoss()
         self.alpha = nn.Parameter(torch.tensor(10.0),requires_grad=True)
 
         # Image Decoder Layer
-        self.decoder_layer = DecoderLayer(self.encoder_dim,1,self.device)
+        self.decoder_layer = DecoderLayer(self.encoder_dim,config["NUM_LAYERS"],self.device)
         self.decoder_embedding =build(self.encoder_dim)
         
 
