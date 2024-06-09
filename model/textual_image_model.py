@@ -76,19 +76,24 @@ class FusionLayerBlock(nn.Module):
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.text_self_attn = ResidualEncoderAttentionBlock(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.text_self_attn =nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.text_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.text_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.text_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
         self.text_ffn = FeedForwardNetwork(d_model)
-
+        self.text_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
+        self.text_cross_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.text_add_norm_layer_4 = AddNorm(d_model, dropout=dropout)
 
         # 2.Decoder layer
-        self.img_self_attn_2 = ResidualEncoderAttentionBlock(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.img_self_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.img_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.img_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.img_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
         self.img_ffn = FeedForwardNetwork(d_model)
+        self.img_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
+        self.img_cross_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.img_add_norm_layer_4 = AddNorm(d_model, dropout=dropout)
 
     def forward(self, pair):
         # self attention
@@ -104,14 +109,22 @@ class FusionLayerBlock(nn.Module):
         y1attn,_= self.text_cross_attn_1(y1,y2,y2)
         y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
-        y1_after= self.text_ffn(y1attn)
+        y1attn1,_= self.text_cross_attn_2(y2,y1attn,y1attn)
+        y1attn1 = self.text_add_norm_layer_4(y1attn1,y2)
+
+        y1_after= self.text_ffn(y1attn1)
+        y1_after = self.text_add_norm_layer_3(y1_after,y1attn1)
 
 
         # cross attention
         y2attn,_= self.img_cross_attn_1(y2,y1,y1)
         y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
-        y2_after= self.img_ffn(y2attn)
+        y2attn1,_= self.img_cross_attn_2(y1,y2attn,y2attn)
+        y2attn1 = self.img_add_norm_layer_4(y2attn1,y1)
+
+        y2_after= self.img_ffn(y2attn1)
+        y2_after = self.img_add_norm_layer_3(y2_after,y2attn1)
 
         return (y1_after,y2_after)
 
@@ -173,7 +186,7 @@ class DecoderLayerBlock(nn.Module):
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.self_attn =ResidualEncoderAttentionBlock(d_model, n_heads, dropout=dropout,batch_first=batch_first) 
         self.add_norm1 = AddNorm(d_model, dropout=dropout)
         self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
@@ -193,6 +206,7 @@ class DecoderLayerBlock(nn.Module):
         yattn2 = self.add_norm3(yattn2,yattn)
 
         y_after= self.ffn(yattn2)
+        y_after = self.add_norm4(y_after,yattn2)
 
         return (y_after,imgs_feat,text_feat)
     
@@ -354,7 +368,7 @@ class Textual_Image_Model(nn.Module):
         decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
 
 
-        logits = CosineSimilarity.forward(imgs_feat, decoder_feats,device=self.device,n=n)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
 
         # 4. Contrastive Loss
         if self.training:
