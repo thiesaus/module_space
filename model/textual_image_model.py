@@ -372,7 +372,7 @@ class Textual_Image_Model(nn.Module):
 
         # 4. Contrastive Loss
         if self.training:
-            loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
+            loss=self.constrasive_loss(texts_feat,enhanced_text_feat,labels,n=n)
             return dict({"logits": logits,"loss":loss}  )
         else:
             return dict({"logits": logits})
