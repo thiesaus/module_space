@@ -346,9 +346,9 @@ class Textual_Image_Model(nn.Module):
 
         # Image Decoder Layer
         self.decoder_layer1 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
-        self.decoder_layer2 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
+        # self.decoder_layer2 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
 
-        self.decoder= SingleAttention(self.encoder_dim)
+        # self.decoder= SingleAttention(self.encoder_dim)
         
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
@@ -413,9 +413,10 @@ class Textual_Image_Model(nn.Module):
         # norm_imgs=self.batch_norm2D(imgs)
         # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
         imgs_feat=self.images_encoder(imgs).requires_grad_() # [ bn, 64, 768]
-        
+        imgs_feat=imgs_feat/imgs_feat.norm(dim=-1, keepdim=True)
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts).requires_grad_() # [m,64,768]
+        texts_feat=texts_feat/texts_feat.norm(dim=-1, keepdim=True)
         texts_feat = self.text_projection(texts_feat)
         texts_feat = texts_feat.unsqueeze(0)
         texts_feat= texts_feat.repeat(n,1,1,1)
@@ -433,11 +434,11 @@ class Textual_Image_Model(nn.Module):
         # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats_images = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
-        decoder_feats_texts = self.decoder_layer2(texts_feat_clone,imgs_feat,texts_feat)
+        decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
+        # decoder_feats_texts = self.decoder_layer2(texts_feat_clone,imgs_feat,texts_feat)
 
         # 5. Decoder
-        decoder_feats = self.decoder(decoder_feats_images,decoder_feats_texts) * texts_feat
+        # decoder_feats = self.decoder(decoder_feats_images,decoder_feats_texts) * texts_feat
 
 
         logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
