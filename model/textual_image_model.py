@@ -110,22 +110,22 @@ class FusionLayerBlock(nn.Module):
         y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
-        y1attn,_= self.text_cross_attn_1(y1,y2,y2)
-        y1attn = self.text_add_norm_layer_2(y1attn,y1)
+        y1attn,_= self.text_cross_attn_1(y1,y2,y2) * y1
+        # y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
-        y1_after= self.text_ffn(y1attn)
-        y1_after = self.text_add_norm_layer_3(y1_after,y1attn)
+        # y1_after= self.text_ffn(y1attn)
+        # y1_after = self.text_add_norm_layer_3(y1_after,y1attn)
 
 
         # cross attention
-        y2attn,_= self.img_cross_attn_1(y2,y1,y1)
-        y2attn = self.img_add_norm_layer_2(y2attn,y2)
+        y2attn,_= self.img_cross_attn_1(y2,y1,y1) * y2
+        # y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
 
-        y2_after= self.img_ffn(y2attn)
-        y2_after = self.img_add_norm_layer_3(y2_after,y2attn)
+        # y2_after= self.img_ffn(y2attn)
+        # y2_after = self.img_add_norm_layer_3(y2_after,y2attn)
 
-        return (y1_after,y2_after)
+        return (y1attn,y2attn)
 
     
 class FusionLayer(nn.Module):
