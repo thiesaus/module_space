@@ -14,7 +14,7 @@ class AddNorm(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, X, Y):
-        return self.layer_norm(self.dropout(X) + Y)
+        return self.layer_norm(self.dropout(Y) + X)
 
 
 class FeedForwardNetwork(nn.Module):
@@ -355,7 +355,7 @@ class Textual_Image_Model(nn.Module):
         decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
 
 
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
+        logits = CosineSimilarity.forward(imgs_feat, decoder_feats,device=self.device,n=n)
 
         # 4. Contrastive Loss
         if self.training:
