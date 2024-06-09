@@ -220,28 +220,6 @@ class DecoderLayer(nn.Module):
     def forward(self,x,imgs_feat,text_feat):
         return self.decoderlayer((x,imgs_feat,text_feat))
 
-class SingleAttention(nn.Module):
-    def __init__(self,d_model,n_heads=4,batch_first=True,dropout=0.1):
-        super(SingleAttention, self).__init__()
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm2 = AddNorm(d_model, dropout=dropout)
-       
-        self.ffn = FeedForwardNetwork(d_model)
-        self.add_norm4 = AddNorm(d_model, dropout=dropout)
-    def forward(self,x,y1):
-        y,_= self.self_attn(x,x,x)
-        y = self.add_norm1(y,x)
-
-        yattn,_= self.image_cross_attn(y,y1,y1)
-        yattn = self.add_norm2(yattn,y)
-
-        y_after= self.ffn(yattn)
-
-        return y_after
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
@@ -372,7 +350,7 @@ class Textual_Image_Model(nn.Module):
         # 4. Contrastive Loss
         if self.training:
             loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
-            return dict({"logits": logits,"loss":loss}  )
+            return dict({"logits": 1-logits,"loss":loss}  )
         else:
             return dict({"logits": logits})
 
