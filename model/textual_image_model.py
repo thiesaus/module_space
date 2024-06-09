@@ -345,12 +345,12 @@ class Textual_Image_Model(nn.Module):
         decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
 
 
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n) *-1
 
         # 4. Contrastive Loss
         if self.training:
             loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
-            return dict({"logits": 1-logits,"loss":loss}  )
+            return dict({"logits": logits,"loss":loss}  )
         else:
             return dict({"logits": logits})
 
