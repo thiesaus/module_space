@@ -353,25 +353,25 @@ class Textual_Image_Model(nn.Module):
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
         # 3. Enhance Image and Text Features
-        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         imgs_feat_clone = imgs_feat.clone()
         # 3.1 Enrich Layer
         # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
-        # decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
+        decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
         # decoder_feats_texts = self.decoder_layer2(texts_feat_clone,imgs_feat,texts_feat)
 
         # 5. Decoder
         # decoder_feats = self.decoder(decoder_feats_images,decoder_feats_texts) * texts_feat
 
 
-        logits = CosineSimilarity.forward(check_hidden_feat, imgs_feat_clone,device=self.device,n=n)
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
 
         # 4. Contrastive Loss
         if self.training:
-            loss=self.constrasive_loss(texts_feat,imgs_feat_clone,labels,n=n)
+            loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
             return dict({"logits": logits,"loss":loss}  )
         else:
             return dict({"logits": logits})
