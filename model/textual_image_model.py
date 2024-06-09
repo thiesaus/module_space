@@ -14,111 +14,60 @@ class AddNorm(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, X, Y):
-        return self.layer_norm(self.dropout(Y) + X)
+        return self.layer_norm(self.dropout(X) + Y)
 
 
 class FeedForwardNetwork(nn.Module):
     def __init__(self, d_model, dropout=0.1):
         super().__init__()
-        self.mlp = nn.Linear(d_model, d_model)
-        self.drop = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(d_model)
-
-    def forward(self, x):
-        y = self.mlp(x)
-        x = x + self.drop(y)
-        x = self.norm(x)
-        return x
-
-class PositionWiseFFN(nn.Module):  #@save
-    """The positionwise feed-forward network."""
-    def __init__(self, ffn_num_hiddens, ffn_num_outputs):
-        super().__init__()
-        self.dense1 = nn.Linear(ffn_num_hiddens)
+        hidden=1024
+        self.linear1 = nn.Linear(d_model, hidden)
+        self.linear2 = nn.Linear(hidden, d_model)
         self.relu = nn.ReLU()
-        self.dense2 = nn.Linear(ffn_num_outputs)
-
-    def forward(self, X):
-        return self.dense2(self.relu(self.dense1(X)))
-
-
-class CausalSelfAttention(nn.Module):
-    def __init__(self, d_model, n_heads, dropout=0.1):
-        super(CausalSelfAttention, self).__init__()
-        assert d_model % n_heads == 0
-
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.d_k = d_model // n_heads
-
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-
-        self.attention = nn.functional.softmax
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
-        batch_size, seq_len, _ = x.size()
-
-        # Project the input into queries, keys, and values
-        q = self.W_q(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
-        k = self.W_k(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
-        v = self.W_v(x).view(batch_size, seq_len, self.n_heads, self.d_k).transpose(1, 2)
-
-        # Compute the causal mask
-        mask = torch.tril(torch.ones(seq_len, seq_len,device=x.device)).unsqueeze(0).unsqueeze(0)
-
-        # Compute the scaled dot-product attention
-        scores = torch.matmul(q, k.transpose(-2, -1)) / (self.d_k ** 0.5)
-        scores = scores.masked_fill(mask == 0, -1e9)
-        attn = self.attention(scores, dim=-1)
-        attn = self.dropout(attn)
-
-        # Compute the output
-        out = torch.matmul(attn, v).transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
-        return out
-
-class EnrichBlock(nn.Module):
-    def __init__(self,d_model, n_heads=8, dropout=0.1,batch_first=True):
-        super(EnrichBlock, self).__init__()
-        self.d_model = d_model
-        self.n_heads = n_heads
-
-        # 1.Encoder layer
-        self.self_attn = CausalSelfAttention(d_model, n_heads, dropout=dropout)
-        self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn2= nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm3 = AddNorm(d_model, dropout=dropout)
-        self.ffn = FeedForwardNetwork(d_model)
-        self.add_norm4 = AddNorm(d_model, dropout=dropout)
+        x = self.linear1(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.linear2(x)
+        return x
     
-    def forward(self,x_q,x1,x2):
-        y= self.self_attn(x_q)
-        y = self.add_norm1(y,x_q)
-        yattn,_ =  self.cross_attn(y,x1,x1)
-        yattn = self.add_norm2(yattn,y)
-        yattn2,_ =  self.cross_attn(yattn,x2,x2)
-        yattn2 = self.add_norm2(yattn2,yattn)
-        y_after= self.ffn(yattn2)
-        return y_after
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, d_model, n_heads, dropout=0.1,batch_first=True):
+        super(MultiHeadSelfAttention, self).__init__()
+        self.attention=nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+    
+    def forward(self, x):
+        return self.attention(x,x,x)[0]
 
-class EnrichLayer(nn.Module):
-    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
-        super(EnrichLayer, self).__init__()
-        self.device=device
-        self.d_model=d_model
-        self.num_layer=num_layer
-        self.enrichlayer= nn.ModuleList([EnrichBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+
+class MLP(nn.Module):
+    """
+    MLP is a simple implementaion of a feed-forward neural network(also known as a multi-layer perceptron)
+    with two linear layers and a ReLU acivation function.
+    """
+    def __init__(self, n_state):
+        super(MLP, self).__init__()
+        self.fc1=nn.Linear(n_state, n_state)
+        self.fc2=nn.Linear(n_state, n_state)
     
-    def forward(self,imgs_feat,text_feat):
-        output = text_feat.clone()
-        for i in range(self.num_layer):
-            output = self.enrichlayer[i](output,imgs_feat,text_feat)
-        return output
-    
+    def forward(self, x):
+        return self.fc2(F.relu(self.fc1(x)))
+
+
+class ResidualEncoderAttentionBlock(nn.Module):
+    def __init__(self, d_model, n_heads=4, dropout=0.1,batch_first=True):
+        super(ResidualEncoderAttentionBlock, self).__init__()
+        self.attn=MultiHeadSelfAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.attn_ln=nn.LayerNorm(d_model)
+        self.mlp=MLP(d_model)
+        self.mlp_ln=nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        x=x+self.attn(self.attn_ln(x))
+        x=x+self.mlp(self.mlp_ln(x))
+        return x
 
 class FusionLayerBlock(nn.Module):
     def __init__(self, d_model, n_heads=4, dropout=0.1,batch_first=True):
@@ -127,42 +76,41 @@ class FusionLayerBlock(nn.Module):
         self.n_heads = n_heads
 
         # 1.Encoder layer
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm1 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm2 = AddNorm(d_model, dropout=dropout)
-        self.add_norm3 = AddNorm(d_model, dropout=dropout)
+        self.text_self_attn = ResidualEncoderAttentionBlock(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.text_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
+        self.text_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.text_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
+        self.text_ffn = FeedForwardNetwork(d_model)
+
 
         # 2.Decoder layer
-        self.self_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm4 = AddNorm(d_model, dropout=dropout)
-        self.cross_attn2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm5 = AddNorm(d_model, dropout=dropout)
-        self.add_norm6 = AddNorm(d_model, dropout=dropout)
-        self.ffn = FeedForwardNetwork(d_model)
-        self.ffn2 = FeedForwardNetwork(d_model)
+        self.img_self_attn_2 = ResidualEncoderAttentionBlock(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.img_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
+        self.img_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
+        self.img_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
+        self.img_ffn = FeedForwardNetwork(d_model)
 
     def forward(self, x1,x2):
         # self attention
-        y1,_= self.self_attn(x1,x1,x1)
-        y1 = self.add_norm1(y1,x1)
+        y1,_= self.text_self_attn(x1,x1,x1)
+        y1 = self.text_add_norm_layer_1(y1,x1)
 
          # self attention
-        y2,_= self.self_attn2(x2,x2,x2)
-        y2 = self.add_norm4(y2,x2)
+        y2,_= self.img_self_attn_2(x2,x2,x2)
+        y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
-        y1attn,_= self.cross_attn(y1,y2,y2)
-        y1attn = self.add_norm2(y1attn,y1)
+        y1attn,_= self.text_cross_attn_1(y1,y2,y2)
+        y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
-        y1_after= self.ffn(y1attn)
+        y1_after= self.text_ffn(y1attn)
 
 
         # cross attention
-        y2attn,_= self.cross_attn2(y2,y1,y1)
-        y2attn = self.add_norm5(y2attn,y2)
+        y2attn,_= self.img_cross_attn_1(y2,y1,y1)
+        y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
-        y2_after= self.ffn2(y2attn)
+        y2_after= self.img_ffn(y2attn)
 
         return y1_after,y2_after
 
