@@ -8,43 +8,27 @@ from model.position_embedding import build
 
 
 class AddNorm(nn.Module):
-    def __init__(self, d_model, dropout=0.1):
+    def __init__(self, d_model, dropout=0.01):
         super(AddNorm, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, X, Y):
-        return self.layer_norm(Y + X)
+        return self.layer_norm(self.dropout(Y) + X)
 
 
 class FeedForwardNetwork(nn.Module):
-    def __init__(self, d_model, dim_feedforward=2048, dropout=0.1):
-        super(FeedForwardNetwork, self).__init__()
-        self.linear1 = nn.Linear(d_model, dim_feedforward)
-        self.activation = nn.ReLU()
-        self.dropout = nn.Dropout(dropout)
-        self.linear2 = nn.Linear(dim_feedforward, d_model)
+    def __init__(self, d_model, dropout=0.1):
+        super().__init__()
+        self.mlp = nn.Linear(d_model, d_model)
+        self.drop = nn.Dropout(dropout)
+        self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x):
-        """
-        Args:
-            x (Tensor): Input tensor with shape (batch_size, sequence_length, d_model)
-        Returns:
-            Tensor: Output tensor with shape (batch_size, sequence_length, d_model)
-        """
-        batch_size, sequence_length, _ = x.size()
-
-        # Apply the first linear layer and activation function
-        ffn_output = self.linear1(x)
-        ffn_output = self.activation(ffn_output)
-
-        # # Apply dropout
-        # ffn_output = self.dropout(ffn_output)
-
-        # # Apply the second linear layer
-        ffn_output = self.linear2(ffn_output)
-
-        return ffn_output
+        y = self.mlp(x)
+        x = x + self.drop(y)
+        x = self.norm(x)
+        return x
 
 class PositionWiseFFN(nn.Module):  #@save
     """The positionwise feed-forward network."""
@@ -119,7 +103,6 @@ class EnrichBlock(nn.Module):
         yattn2,_ =  self.cross_attn(yattn,x2,x2)
         yattn2 = self.add_norm2(yattn2,yattn)
         y_after= self.ffn(yattn2)
-        y_after = self.add_norm3(y_after,yattn2)
         return y_after
 
 class EnrichLayer(nn.Module):
@@ -173,7 +156,6 @@ class FusionLayerBlock(nn.Module):
         y1attn = self.add_norm2(y1attn,y1)
 
         y1_after= self.ffn(y1attn)
-        y1_after = self.add_norm3(y1_after,y1attn)
 
 
         # cross attention
@@ -181,7 +163,6 @@ class FusionLayerBlock(nn.Module):
         y2attn = self.add_norm5(y2attn,y2)
 
         y2_after= self.ffn2(y2attn)
-        y2_after = self.add_norm6(y2_after,y2attn)
 
         return y1_after,y2_after
 
@@ -274,7 +255,6 @@ class DecoderLayerBlock(nn.Module):
         yattn2 = self.add_norm3(yattn2,yattn)
 
         y_after= self.ffn(yattn2)
-        y_after = self.add_norm4(y_after,yattn2)
 
         return y_after 
     
@@ -311,7 +291,6 @@ class SingleAttention(nn.Module):
         yattn = self.add_norm2(yattn,y)
 
         y_after= self.ffn(yattn)
-        y_after = self.add_norm4(y_after,yattn)
 
         return y_after
 
