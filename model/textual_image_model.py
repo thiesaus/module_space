@@ -100,15 +100,15 @@ class FusionLayerBlock(nn.Module):
         y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
-        y1attn,_= self.text_cross_attn_1(y1,y2,y2)
-        y1attn = self.text_add_norm_layer_2(y1attn,y1)
+        y1attn,_= self.text_cross_attn_1(y2,y1,y1)
+        y1attn = self.text_add_norm_layer_2(y1attn,y2)
 
         y1_after= self.text_ffn(y1attn)
 
 
         # cross attention
-        y2attn,_= self.img_cross_attn_1(y2,y1,y1)
-        y2attn = self.img_add_norm_layer_2(y2attn,y2)
+        y2attn,_= self.img_cross_attn_1(y1,y2,y2)
+        y2attn = self.img_add_norm_layer_2(y2attn,y1)
 
         y2_after= self.img_ffn(y2attn)
 
@@ -348,30 +348,28 @@ class Textual_Image_Model(nn.Module):
         texts_feat = texts_feat.unsqueeze(0)
         texts_feat= texts_feat.repeat(n,1,1,1)
         texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
-        check_hidden_feat = texts_feat.clone()
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         texts_feat = self.position_embedding_text(texts_feat)
-        # 3. Enhance Image and Text Features
-        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        check_hidden_feat = texts_feat.clone()
+
         imgs_feat_clone = imgs_feat.clone()
+
+        # 3. Enhance Image and Text Features
+        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         # 3.1 Enrich Layer
         # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
-        # decoder_feats_texts = self.decoder_layer2(texts_feat_clone,imgs_feat,texts_feat)
-
-        # 5. Decoder
-        # decoder_feats = self.decoder(decoder_feats_images,decoder_feats_texts) * texts_feat
+        # decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
 
 
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n)
+        logits = CosineSimilarity.forward(check_hidden_feat, imgs_feat,device=self.device,n=n)
 
         # 4. Contrastive Loss
         if self.training:
-            loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
+            loss=self.constrasive_loss(texts_feat,imgs_feat,labels,n=n)
             return dict({"logits": logits,"loss":loss}  )
         else:
             return dict({"logits": logits})
