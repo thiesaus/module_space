@@ -87,7 +87,7 @@ class FusionLayerBlock(nn.Module):
         self.text_self_attn =nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.text_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.text_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.text_add_norm_layer_2 = MulNorm(d_model, dropout=dropout)
+        self.text_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
         self.text_ffn = FeedForwardNetwork(d_model)
         self.text_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
 
@@ -95,7 +95,7 @@ class FusionLayerBlock(nn.Module):
         self.img_self_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.img_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.img_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.img_add_norm_layer_2 = MulNorm(d_model, dropout=dropout)
+        self.img_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
         self.img_ffn = FeedForwardNetwork(d_model)
         self.img_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
 
@@ -190,7 +190,7 @@ class DecoderLayerBlock(nn.Module):
         self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
         self.text_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm3 = MulNorm(d_model,  dropout=dropout)
+        self.add_norm3 = AddNorm(d_model,  dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
     def forward(self,pair):
@@ -239,6 +239,7 @@ class Textual_Image_Model(nn.Module):
         self.text_tokenizer =RobertaTokenizerFast.from_pretrained("FacebookAI/roberta-base")
         self.bert_model=RobertaModel.from_pretrained("FacebookAI/roberta-base")
         self.text_projection = nn.Linear(self.encoder_dim, self.encoder_dim)
+        self._freeze_params()
         #Image  Fusion Attention
         local_reso = 8 * 8
         local_scale = local_reso ** -0.5
@@ -253,13 +254,15 @@ class Textual_Image_Model(nn.Module):
 
         # Image Decoder Layer
         self.decoder_layer1 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
-        # self.decoder_layer2 = DecoderLayer(self.encoder_dim,self.num_decoder_layer,self.device)
 
         # self.decoder= SingleAttention(self.encoder_dim)
         
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
-
+    def _freeze_params(self):
+         for p in list(self.image_model.parameters()) + \
+                 list(self.bert_model.parameters()) :
+            p.requires_grad = False
     def get_img_fc(self, use_ln=True):
         # if use_ln:
         #     return nn.Sequential(
@@ -297,13 +300,27 @@ class Textual_Image_Model(nn.Module):
     def images_encoder(self,images):
         inputs = self.image_processor(images, return_tensors="pt",do_rescale=False).to(self.device)
         outputs= self.image_model(**inputs)
-        return outputs.last_hidden_state
+        return outputs.last_hidden_state.clone()
     
     def text_encoder(self,text):
         inputs = self.text_tokenizer.batch_encode_plus(text,max_length=64,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {k: inputs[k] for k in ['input_ids', 'attention_mask']}
         outputs = self.bert_model(**tokenizer_input)
-        return outputs.last_hidden_state
+        outputs=outputs.last_hidden_state.clone()
+        outputs = self.text_projection(outputs)
+
+        return outputs
+    
+    def lgqselect(self,imgs_feat,texts_feat,num_proposals=5):
+        '''
+        imgs_feat: [bs,ln,c]
+        texts_feat: [bs,lm,c]
+        '''
+        logits = torch.einsum("bic,btc->bit", imgs_feat, texts_feat) # [bs,ln,lm]
+        logit_per_img = logits.max(-1)[0] # [bs,ln]
+        topk_proposals = torch.topk(logit_per_img, num_proposals, dim=-1)[1]
+        return topk_proposals
+
 
     def forward(self,x):
         # x = {"local_images": PIL.Image[n],
@@ -327,7 +344,6 @@ class Textual_Image_Model(nn.Module):
         texts_feat = texts_feat.unsqueeze(0)
         texts_feat= texts_feat.repeat(n,1,1,1)
         texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
-        texts_feat = self.text_projection(texts_feat)
         check_hidden_feat = texts_feat.clone()
 
         imgs_feat = self.position_embedding_image + imgs_feat.permute(0,2,1)
@@ -340,12 +356,12 @@ class Textual_Image_Model(nn.Module):
         # 3.1 Enrich Layer
         # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
+        # topk_feature = self.lgqselect(imgs_feat,texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
+        decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat)
 
-
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n) *-1
+        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n) 
 
         # 4. Contrastive Loss
         if self.training:

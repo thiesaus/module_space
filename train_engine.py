@@ -22,6 +22,9 @@ import wandb
 from model.loss import SimilarityLoss
 from model.accuracy import test_accuracy
 from data.dataloader import get_dataloader
+
+from model.test_hook import test
+
 sim_loss = SimilarityLoss(
     rho=None,
     gamma=2.0,
@@ -39,6 +42,7 @@ def train(config: dict):
 
     model = build_textual_image_model(config=config)
     
+    # hook_test=test(model)
 
     # Load Pretrained Model
  
@@ -160,7 +164,7 @@ def train(config: dict):
                 if epoch >= config["NO_GRAD_STEPS"][i]:
                     no_grad_frames = config["NO_GRAD_FRAMES"][i]
                     break
-
+             
         output_dict=train_one_epoch(
             model=model,
             train_states=train_states,
@@ -174,6 +178,7 @@ def train(config: dict):
             accumulation_steps=config["ACCUMULATION_STEPS"],
             multi_checkpoint=multi_checkpoint,
         )
+        
         if (epoch+1) % config["TEST_DIST"] ==0:
             p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
             output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
