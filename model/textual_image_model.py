@@ -259,6 +259,8 @@ class Textual_Image_Model(nn.Module):
 
         # self.decoder= SingleAttention(self.encoder_dim)
         
+        self.query_enhance= nn.MultiheadAttention(self.encoder_dim, 4, dropout=0.1)
+
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
     def _freeze_params(self):
@@ -363,7 +365,10 @@ class Textual_Image_Model(nn.Module):
         # 4. Decoder Layer
         decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat)
 
-        logits = CosineSimilarity.forward(check_hidden_feat, decoder_feats,device=self.device,n=n) 
+        enhanced_text_feat = self.query_enhance(texts_feat,decoder_feats,decoder_feats)[0] * texts_feat
+
+
+        logits = CosineSimilarity.forward(check_hidden_feat, enhanced_text_feat,device=self.device,n=n) 
 
         # 4. Contrastive Loss
         if self.training:
