@@ -14,7 +14,7 @@ class AddNorm(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, X, Y):
-        return self.layer_norm(self.dropout(Y) + X)
+        return self.layer_norm(Y + X)
 
 
 class FeedForwardNetwork(nn.Module):
@@ -38,10 +38,10 @@ class FeedForwardNetwork(nn.Module):
         ffn_output = self.linear1(x)
         ffn_output = self.activation(ffn_output)
 
-        # Apply dropout
-        ffn_output = self.dropout(ffn_output)
+        # # Apply dropout
+        # ffn_output = self.dropout(ffn_output)
 
-        # Apply the second linear layer
+        # # Apply the second linear layer
         ffn_output = self.linear2(ffn_output)
 
         return ffn_output
