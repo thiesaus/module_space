@@ -121,7 +121,7 @@ class EnrichLayer(nn.Module):
     
 
 class FusionLayerBlock(nn.Module):
-    def __init__(self, d_model, n_heads=8, dropout=0.1,batch_first=True):
+    def __init__(self, d_model, n_heads=4, dropout=0.1,batch_first=True):
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -168,7 +168,7 @@ class FusionLayerBlock(nn.Module):
 
 
 class FusionLayer(nn.Module):
-    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
+    def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
         super(FusionLayer, self).__init__()
         self.device=device
         self.d_model=d_model
@@ -230,7 +230,7 @@ class ContrastiveLoss(nn.Module):
         return loss_contrastive
     
 class DecoderLayerBlock(nn.Module):
-    def __init__(self,d_model, n_heads=8, dropout=0.1,batch_first=True):
+    def __init__(self,d_model, n_heads=4, dropout=0.1,batch_first=True):
         super(DecoderLayerBlock, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
@@ -259,7 +259,7 @@ class DecoderLayerBlock(nn.Module):
         return y_after 
     
 class DecoderLayer(nn.Module):
-    def __init__(self,d_model,num_layer,device,n_head=8,dropout=0.1):
+    def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
         super(DecoderLayer, self).__init__()
         self.device=device
         self.d_model=d_model
@@ -272,7 +272,7 @@ class DecoderLayer(nn.Module):
         return x
 
 class SingleAttention(nn.Module):
-    def __init__(self,d_model,n_heads=8,batch_first=True,dropout=0.1):
+    def __init__(self,d_model,n_heads=4,batch_first=True,dropout=0.1):
         super(SingleAttention, self).__init__()
         self.d_model = d_model
         self.n_heads = n_heads
