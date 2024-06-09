@@ -16,6 +16,14 @@ class AddNorm(nn.Module):
     def forward(self, X, Y):
         return self.layer_norm(self.dropout(Y) + X)
 
+class MulNorm(nn.Module):
+    def __init__(self, d_model, dropout=0.01):
+        super(MulNorm, self).__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
+    def forward(self, X, Y):
+        return self.layer_norm(self.dropout(Y) * X)
 
 class FeedForwardNetwork(nn.Module):
     def __init__(self, d_model, dropout=0.1):
@@ -79,21 +87,17 @@ class FusionLayerBlock(nn.Module):
         self.text_self_attn =nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.text_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.text_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.text_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
+        self.text_add_norm_layer_2 = MulNorm(d_model, dropout=dropout)
         self.text_ffn = FeedForwardNetwork(d_model)
         self.text_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
-        self.text_cross_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.text_add_norm_layer_4 = AddNorm(d_model, dropout=dropout)
 
         # 2.Decoder layer
         self.img_self_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.img_add_norm_layer_1 = AddNorm(d_model, dropout=dropout)
         self.img_cross_attn_1 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.img_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
+        self.img_add_norm_layer_2 = MulNorm(d_model, dropout=dropout)
         self.img_ffn = FeedForwardNetwork(d_model)
         self.img_add_norm_layer_3 = AddNorm(d_model, dropout=dropout)
-        self.img_cross_attn_2 = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.img_add_norm_layer_4 = AddNorm(d_model, dropout=dropout)
 
     def forward(self, pair):
         # self attention
@@ -109,22 +113,17 @@ class FusionLayerBlock(nn.Module):
         y1attn,_= self.text_cross_attn_1(y1,y2,y2)
         y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
-        y1attn1,_= self.text_cross_attn_2(y2,y1attn,y1attn)
-        y1attn1 = self.text_add_norm_layer_4(y1attn1,y2)
-
-        y1_after= self.text_ffn(y1attn1)
-        y1_after = self.text_add_norm_layer_3(y1_after,y1attn1)
+        y1_after= self.text_ffn(y1attn)
+        y1_after = self.text_add_norm_layer_3(y1_after,y1attn)
 
 
         # cross attention
         y2attn,_= self.img_cross_attn_1(y2,y1,y1)
         y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
-        y2attn1,_= self.img_cross_attn_2(y1,y2attn,y2attn)
-        y2attn1 = self.img_add_norm_layer_4(y2attn1,y1)
 
-        y2_after= self.img_ffn(y2attn1)
-        y2_after = self.img_add_norm_layer_3(y2_after,y2attn1)
+        y2_after= self.img_ffn(y2attn)
+        y2_after = self.img_add_norm_layer_3(y2_after,y2attn)
 
         return (y1_after,y2_after)
 
@@ -191,7 +190,7 @@ class DecoderLayerBlock(nn.Module):
         self.image_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.add_norm2 = AddNorm(d_model, dropout=dropout)
         self.text_cross_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
-        self.add_norm3 = AddNorm(d_model,  dropout=dropout)
+        self.add_norm3 = MulNorm(d_model,  dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
     def forward(self,pair):
