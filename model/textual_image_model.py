@@ -98,11 +98,11 @@ class FusionLayerBlock(nn.Module):
     def forward(self, pair):
         # self attention
         x1,x2 = pair
-        y1= self.text_self_attn(x1,x1,x1)
+        y1,_= self.text_self_attn(x1,x1,x1)
         y1 = self.text_add_norm_layer_1(y1,x1)
 
          # self attention
-        y2= self.img_self_attn_2(x2,x2,x2)
+        y2,_= self.img_self_attn_2(x2,x2,x2)
         y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
@@ -196,7 +196,7 @@ class DecoderLayerBlock(nn.Module):
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
     def forward(self,pair):
         x,imgs_feat,text_feat =pair
-        y,_= self.self_attn(x,x,x)
+        y= self.self_attn(x)
         y = self.add_norm1(y,x)
 
         yattn,_= self.image_cross_attn(y,imgs_feat,imgs_feat)
