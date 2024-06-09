@@ -90,8 +90,9 @@ class FusionLayerBlock(nn.Module):
         self.img_add_norm_layer_2 = AddNorm(d_model, dropout=dropout)
         self.img_ffn = FeedForwardNetwork(d_model)
 
-    def forward(self, x1,x2):
+    def forward(self, pair):
         # self attention
+        x1,x2 = pair
         y1= self.text_self_attn(x1)
         y1 = self.text_add_norm_layer_1(y1,x1)
 
@@ -112,9 +113,9 @@ class FusionLayerBlock(nn.Module):
 
         y2_after= self.img_ffn(y2attn)
 
-        return y1_after,y2_after
+        return (y1_after,y2_after)
 
-
+    
 class FusionLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
         super(FusionLayer, self).__init__()
@@ -122,12 +123,11 @@ class FusionLayer(nn.Module):
         self.d_model=d_model
         self.num_layer=num_layer
     
-        self.fusionlayer= nn.ModuleList([FusionLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+        self.fusionlayer= nn.Sequential(*[FusionLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
     
     def forward(self,x1,x2):
-        for i in range(self.num_layer):
-            x1,x2 = self.fusionlayer[i](x1,x2)
-        return x1,x2
+    
+        return  self.fusionlayer((x1,x2))
 
 class CosineSimilarity(nn.Module):
     def __init__(self):
@@ -181,7 +181,8 @@ class DecoderLayerBlock(nn.Module):
         self.add_norm3 = AddNorm(d_model,  dropout=dropout)
         self.ffn = FeedForwardNetwork(d_model)
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
-    def forward(self,x,imgs_feat,text_feat):
+    def forward(self,pair):
+        x,imgs_feat,text_feat =pair
         y,_= self.self_attn(x,x,x)
         y = self.add_norm1(y,x)
 
@@ -193,7 +194,7 @@ class DecoderLayerBlock(nn.Module):
 
         y_after= self.ffn(yattn2)
 
-        return y_after 
+        return (y_after,imgs_feat,text_feat)
     
 class DecoderLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
@@ -201,12 +202,10 @@ class DecoderLayer(nn.Module):
         self.device=device
         self.d_model=d_model
         self.num_layer=num_layer
-        self.decoderlayer= nn.ModuleList([DecoderLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
+        self.decoderlayer= nn.Sequential(*[DecoderLayerBlock(d_model,n_head,dropout) for _ in range(num_layer)])
     
     def forward(self,x,imgs_feat,text_feat):
-        for i in range(self.num_layer):
-            x = self.decoderlayer[i](x,imgs_feat,text_feat)
-        return x
+        return self.decoderlayer((x,imgs_feat,text_feat))
 
 class SingleAttention(nn.Module):
     def __init__(self,d_model,n_heads=4,batch_first=True,dropout=0.1):
@@ -352,7 +351,7 @@ class Textual_Image_Model(nn.Module):
         # texts_feat = self.enrich_text_layer(texts_feat)
 
         # 4. Decoder Layer
-        decoder_feats = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
+        decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat) 
 
 
         logits = CosineSimilarity.forward(imgs_feat, decoder_feats,device=self.device,n=n)
