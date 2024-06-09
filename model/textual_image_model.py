@@ -98,11 +98,11 @@ class FusionLayerBlock(nn.Module):
     def forward(self, pair):
         # self attention
         x1,x2 = pair
-        y1= self.text_self_attn(x1)
+        y1= self.text_self_attn(x1,x1,x1)
         y1 = self.text_add_norm_layer_1(y1,x1)
 
          # self attention
-        y2= self.img_self_attn_2(x2)
+        y2= self.img_self_attn_2(x2,x2,x2)
         y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
