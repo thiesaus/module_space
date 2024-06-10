@@ -102,7 +102,7 @@ class FusionLayer(nn.Module):
 
 class DecoderLayerBlock(nn.Module):
     def __init__(self,d_model, n_heads=4, dropout=0.1,batch_first=True):
-        super(DecoderLayerBlock, self).__init__()
+        super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
 
