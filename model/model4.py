@@ -228,7 +228,7 @@ class Model4(nn.Module):
         self.vis_proj = nn.Linear(self.img_dim, self.feature_dim)
         self.enhanced_layer=EnhancedBlock(self.feature_dim, self.feature_dim,device=self.device)
         # self.reprocess_text1=make_layers(384, 192, 2, is_downsample=True)
-        self.numlayers=config["NUM_LAYERS"]
+        self.numlayers=config["NUM_LAYERS"][0]
         self.supa_layer=make_ziczac_layers(self.feature_dim, self.feature_dim, self.numlayers,device=self.device)
 
         self.temp = nn.Parameter(0.07*torch.ones([]))  
@@ -277,7 +277,7 @@ class Model4(nn.Module):
         for i in range(logits.shape[0]):
             temp= temp+logits[i]
         logits=temp/logits.shape[0]
-        return dict({"logits": logits}  )
+        return dict({"scores": logits}  )
     
 
     def _freeze_encoder(self):

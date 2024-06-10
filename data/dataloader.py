@@ -443,14 +443,14 @@ def get_transform(mode, opt, idx):
                 ratio=opt["random_crop_ratio"]
             ),
             T.ToTensor(),
-            T.Normalize(opt["norm_mean"], opt["norm_std"]),
+            # T.Normalize(opt["norm_mean"], opt["norm_std"]),
         ])
     elif mode == 'test':
         return T.Compose([
             SquarePad(),
             T.Resize(opt["img_hw"][idx]),
             T.ToTensor(),
-            T.Normalize(opt["norm_mean"], opt['norm_std']),
+            # T.Normalize(opt["norm_mean"], opt['norm_std']),
         ])
     elif mode == 'unnorm':
         mean = opt["norm_mean"]

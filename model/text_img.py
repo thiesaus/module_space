@@ -158,7 +158,7 @@ class CosineSimilarity(nn.Module):
 
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, margin=0.5):
+    def __init__(self, margin=1):
         super(ContrastiveLoss, self).__init__()
         self.margin = margin
 
@@ -170,7 +170,7 @@ class ContrastiveLoss(nn.Module):
             target (torch.Tensor): Binary label indicating whether the inputs are similar (1) or dissimilar (0).
         """
         distance =  CosineSimilarity.forward(output1, output2,n,device=output1.device)
-        distance =  (distance +1) /2
+        distance =  distance.sigmoid()
  
         loss_contrastive = torch.mean((1 - target) * torch.pow(distance, 2) +
                                      (target) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2))
@@ -356,11 +356,11 @@ class Textual_Image_Model(nn.Module):
        
         local_reso = 4 * 4
         local_scale = local_reso ** -0.5
-        self.pos_emb_local = nn.Parameter(local_scale * torch.randn(local_reso))
+        self.pos_emb_local = nn.Parameter(local_scale * torch.randn(local_reso),requires_grad=True)
 
         # self.position_embedding_image =build(self.encoder_dim)
         self.position_embedding_text = build(self.encoder_dim)
-        self.fusion_image_layer = SemiFusionLayer(self.encoder_dim,self.num_encoder_layer,self.device)
+        self.fusion_image_layer = FusionLayer(self.encoder_dim,self.num_encoder_layer,self.device)
         self.constrasive_loss = ContrastiveLoss()
         #enrich layer
         # self.enrich_layer = EnrichLayer(self.encoder_dim,self.num_enrich_layer,self.device)
@@ -454,47 +454,46 @@ class Textual_Image_Model(nn.Module):
         
         # 1. Image Encoder
         imgs = rearrange(imgs, 'b n c h w -> (b n) c h w') #[bn,c,h,w]
-        norm_imgs=self.batch_norm2D(imgs)
-        norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
-        imgs_feat=self.images_encoder(norm_imgs) # [ bn, 64, 768]
+        # norm_imgs=self.batch_norm2D(imgs)
+        # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
+        imgs_feat=self.images_encoder(imgs) # [ bn, 64, 768]
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts,n) # [m,64,768]
         imgs_feat, texts_feat = self.postprocessing_layer(imgs_feat,texts_feat)
-        check_hidden_feat = texts_feat.clone()
         # texts_feat= self.position_embedding_text(texts_feat)
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         # texts_feat = self.position_embedding_text(texts_feat)
         
-        fused_feature = self.cross_attn(query=imgs_feat, key=texts_feat, value=texts_feat)[0]
-        fused_feature= fused_feature * imgs_feat
-        fused_feature = self.st_pooling(fused_feature, b)
-        texts_feat = self.ts_pooling(texts_feat, b)
+        texts_feat_clone = texts_feat.clone()
 
         # logits = F.cosine_similarity(check_hidden_feat, fused_feature)
 
         # 3. Enhance Image and Text Features
-        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         # 3.1 Enrich Layer
         # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
         # topk_feature = self.lgqselect(imgs_feat,texts_feat)
-
+        fused_feature = self.cross_attn(query=imgs_feat, key=texts_feat, value=texts_feat)[0]
+        fused_feature= fused_feature * imgs_feat
+        # fused_feature = self.st_pooling(fused_feature, b)
+        # texts_feat = self.ts_pooling(texts_feat, b)
         # 4. Decoder Layer
-        # decoder_feats,_,_ = self.decoder_layer1(imgs_feat_clone,imgs_feat,texts_feat)
+        decoder_feats,_,_ = self.decoder_layer1(fused_feature,imgs_feat,texts_feat)
 
         # enhanced_text_feat = self.query_enhance(texts_feat,decoder_feats,decoder_feats)[0] * texts_feat
 
 
-        # logits = CosineSimilarity.forward(check_hidden_feat, fused_feature,device=self.device,n=n) 
-        logits = F.cosine_similarity(texts_feat, fused_feature)
+        scores = CosineSimilarity.forward(texts_feat_clone, decoder_feats,device=self.device,n=n) 
+        # logits = F.cosine_similarity(texts_feat, fused_feature,dim=-1)
 
         # 4. Contrastive Loss
         if self.training:
-            # loss=self.constrasive_loss(texts_feat,imgs_feat,labels,n=n)
-            return dict({"logits": logits,"loss":0}  )
+            loss=self.constrasive_loss(texts_feat,decoder_feats,labels,n=n)
+            return dict({"scores": scores,"loss":loss}  )
         else:
-            return dict({"logits": logits})
+            return dict({"scores": scores})
 
 
 def build_textual_image_model(config: dict):
