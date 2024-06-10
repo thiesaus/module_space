@@ -117,7 +117,7 @@ class DecoderLayerBlock(nn.Module):
         self.add_norm4 = AddNorm(d_model, dropout=dropout)
     def forward(self,pair):
         x,imgs_feat,text_feat =pair
-        y= self.self_attn(x,x,x)
+        y,_= self.self_attn(x,x,x)
         y = self.add_norm1(y,x)
 
         yattn,_= self.image_cross_attn(y,imgs_feat,imgs_feat)
