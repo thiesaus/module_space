@@ -71,7 +71,7 @@ class FFN(nn.Module):
         return x
 
 
-class Model5(nn.Module):
+class Model6(nn.Module):
     def __init__(self):
         super().__init__()
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")

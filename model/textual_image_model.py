@@ -9,7 +9,7 @@ from model.position_embedding import build
 
 class AddNorm(nn.Module):
     def __init__(self, d_model, dropout=0.01):
-        super(AddNorm, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model)
 
@@ -18,7 +18,7 @@ class AddNorm(nn.Module):
 
 class MulNorm(nn.Module):
     def __init__(self, d_model, dropout=0.01):
-        super(MulNorm, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model)
 
@@ -43,7 +43,7 @@ class FeedForwardNetwork(nn.Module):
     
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model, n_heads, dropout=0.1,batch_first=True):
-        super(MultiHeadSelfAttention, self).__init__()
+        super().__init__()
         self.attention=nn.MultiheadAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
     
     def forward(self, x):
@@ -56,7 +56,7 @@ class MLP(nn.Module):
     with two linear layers and a ReLU acivation function.
     """
     def __init__(self, n_state):
-        super(MLP, self).__init__()
+        super().__init__()
         self.fc1=nn.Linear(n_state, n_state)
         self.fc2=nn.Linear(n_state, n_state)
     
@@ -66,7 +66,7 @@ class MLP(nn.Module):
 
 class ResidualEncoderAttentionBlock(nn.Module):
     def __init__(self, d_model, n_heads=4, dropout=0.1,batch_first=True):
-        super(ResidualEncoderAttentionBlock, self).__init__()
+        super().__init__()
         self.attn=MultiHeadSelfAttention(d_model, n_heads, dropout=dropout,batch_first=batch_first)
         self.attn_ln=nn.LayerNorm(d_model)
         self.mlp=MLP(d_model)
@@ -102,20 +102,20 @@ class FusionLayerBlock(nn.Module):
     def forward(self, pair):
         # self attention
         x1,x2 = pair
-        # y1,_= self.text_self_attn(x1,x1,x1)
-        # y1 = self.text_add_norm_layer_1(y1,x1)
+        y1,_= self.text_self_attn(x1,x1,x1)
+        y1 = self.text_add_norm_layer_1(y1,x1)
 
         #  # self attention
-        # y2,_= self.img_self_attn_2(x2,x2,x2)
-        # y2 = self.img_add_norm_layer_1(y2,x2)
+        y2,_= self.img_self_attn_2(x2,x2,x2)
+        y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
         y1attn,_= self.text_cross_attn_1(x1,x2,x2) 
         y1attn = y1attn * x1
         # y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
-        # y1_after= self.text_ffn(y1attn)
-        # y1_after = self.text_add_norm_layer_3(y1_after,y1attn)
+        y1_after= self.text_ffn(y1attn)
+        y1_after = self.text_add_norm_layer_3(y1_after,y1attn)
 
 
         # cross attention
@@ -124,15 +124,15 @@ class FusionLayerBlock(nn.Module):
         # y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
 
-        # y2_after= self.img_ffn(y2attn)
-        # y2_after = self.img_add_norm_layer_3(y2_after,y2attn)
+        y2_after= self.img_ffn(y2attn)
+        y2_after = self.img_add_norm_layer_3(y2_after,y2attn)
 
-        return (y1attn,y2attn)
+        return (y1_after,y2_after)
 
     
 class FusionLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
-        super(FusionLayer, self).__init__()
+        super().__init__()
         self.device=device
         self.d_model=d_model
         self.num_layer=num_layer
@@ -163,7 +163,7 @@ class CosineSimilarity(nn.Module):
 
 class ContrastiveLoss(nn.Module):
     def __init__(self, margin=0.5):
-        super(ContrastiveLoss, self).__init__()
+        super().__init__()
         self.margin = margin
 
     def forward(self, output1, output2, target,n=1):
@@ -182,7 +182,7 @@ class ContrastiveLoss(nn.Module):
     
 class DecoderLayerBlock(nn.Module):
     def __init__(self,d_model, n_heads=4, dropout=0.1,batch_first=True):
-        super(DecoderLayerBlock, self).__init__()
+        super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
 
@@ -213,7 +213,7 @@ class DecoderLayerBlock(nn.Module):
     
 class DecoderLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1):
-        super(DecoderLayer, self).__init__()
+        super().__init__()
         self.device=device
         self.d_model=d_model
         self.num_layer=num_layer
@@ -225,7 +225,7 @@ class DecoderLayer(nn.Module):
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
-        super(Textual_Image_Model, self).__init__()
+        super().__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.encoder_dim = 768
         self.num_encoder_layer=config["NUM_LAYERS"][0]
@@ -315,15 +315,7 @@ class Textual_Image_Model(nn.Module):
 
         return outputs
     
-    def lgqselect(self,imgs_feat,texts_feat,num_proposals=5):
-        '''
-        imgs_feat: [bs,ln,c]
-        texts_feat: [bs,lm,c]
-        '''
-        logits = torch.einsum("bic,btc->bit", imgs_feat, texts_feat) # [bs,ln,lm]
-        logit_per_img = logits.max(-1)[0] # [bs,ln]
-        topk_proposals = torch.topk(logit_per_img, num_proposals, dim=-1)[1]
-        return topk_proposals
+    
 
 
     def forward(self,x):
