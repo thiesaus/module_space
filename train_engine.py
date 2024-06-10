@@ -311,7 +311,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         # criterion.process(model_outputs=model_outputs,batch_idx=i)
         # loss_dict,log_dict=criterion.get_loss_and_log()
         scores = model_outputs['scores']
-        contrastive_loss = 0
+        contrastive_loss = model_outputs['loss']
         loss =sim_loss(scores, targets) + contrastive_loss
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
@@ -320,7 +320,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=0)
+        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss)
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
