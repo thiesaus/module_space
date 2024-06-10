@@ -183,18 +183,20 @@ class Model6(nn.Module):
         visual_feat = self.visual_local_global(
                     x['local_images'], x['global_image'], textual_feat
                 )
-        b= x['local_images'].shape[0]
-        visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
-        scores = F.cosine_similarity(visual_feat, textual_hidden,dim=-1)
-        temp=torch.zeros(scores.shape[1],device=self.device)
-        for i in range(scores.shape[0]):
-            temp= temp+scores[i]
-        scores=temp/scores.shape[0]
+        # visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
+        k1 = rearrange(visual_feat,"(b n) c -> n b c",b=b)
+        k2 = rearrange(textual_hidden,"(b n) c -> n b c",b=b)
+        scores = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
+        # temp=torch.zeros(scores.shape[1],device=self.device)
+        # for i in range(scores.shape[0]):
+        #     temp= temp+scores[i]
+        # scores=temp/scores.shape[0]
             
 
         output['scores'] = scores
         output['vis_feat'] = visual_feat
         output['text_feat'] = textual_feat
+        output['loss']=0
         return output
 
     def st_pooling(self, feat, bs):
