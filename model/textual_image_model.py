@@ -102,16 +102,16 @@ class FusionLayerBlock(nn.Module):
     def forward(self, pair):
         # self attention
         x1,x2 = pair
-        y1,_= self.text_self_attn(x1,x1,x1)
-        y1 = self.text_add_norm_layer_1(y1,x1)
+        # y1,_= self.text_self_attn(x1,x1,x1)
+        # y1 = self.text_add_norm_layer_1(y1,x1)
 
-         # self attention
-        y2,_= self.img_self_attn_2(x2,x2,x2)
-        y2 = self.img_add_norm_layer_1(y2,x2)
+        #  # self attention
+        # y2,_= self.img_self_attn_2(x2,x2,x2)
+        # y2 = self.img_add_norm_layer_1(y2,x2)
 
         # cross attention
-        y1attn,_= self.text_cross_attn_1(y1,y2,y2) 
-        y1attn = y1attn * y1
+        y1attn,_= self.text_cross_attn_1(x1,x2,x2) 
+        y1attn = y1attn * x1
         # y1attn = self.text_add_norm_layer_2(y1attn,y1)
 
         # y1_after= self.text_ffn(y1attn)
@@ -119,8 +119,8 @@ class FusionLayerBlock(nn.Module):
 
 
         # cross attention
-        y2attn,_= self.img_cross_attn_1(y2,y1,y1) 
-        y2attn = y2attn * y2
+        y2attn,_= self.img_cross_attn_1(x2,x1,x1) 
+        y2attn = y2attn * x2
         # y2attn = self.img_add_norm_layer_2(y2attn,y2)
 
 
