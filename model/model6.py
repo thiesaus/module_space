@@ -124,17 +124,8 @@ class Model6(nn.Module):
         )
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         self.fusion_ffn = FFN(self.img_dim, 0.1)
-        #     self.fusion_drop = nn.Dropout(p=0.1)
-        # elif self.opt.kum_mode in ('cross correlation', 'text-first modulation'):
-        #     self.fusion_conv1 = nn.Sequential(
-        #         nn.Conv1d(self.text_dim, self.img_dim, kernel_size=1, bias=False),
-        #         nn.BatchNorm1d(self.img_dim),
-        #     )
-        #     self.fusion_conv2 = nn.Sequential(
-        #         nn.Conv1d(self.img_dim, self.img_dim, kernel_size=1, bias=False),
-        #         nn.BatchNorm1d(self.img_dim),
-        #     )
-        #     self.fusion_drop = nn.Dropout(p=0.1)
+
+        self.enhance_layer=FusionLayer(self.feature_dim,4,self.device,4,0.1,batch_first=False)
     def _freeze_text_encoder(self):
         """
         These parameters are not frozen:
@@ -221,13 +212,7 @@ class Model6(nn.Module):
 
     def cross_modal_fusion(self, vis_feat, text_feat, b,t):
         # if mode == 'cascade attention':
-        assert len(text_feat.size()) == 3
-        # get textual embeddings
-        text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
-        text_feat = text_feat.repeat([1, t, 1, 1])
-        text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        text_feat = self.fusion_fc(text_feat)
-        text_feat = rearrange(text_feat, 'bt l c -> l bt c')
+      
         # fusion
         fused_feat = self.fusion_visual_textual(
             query=vis_feat,
@@ -266,7 +251,18 @@ class Model6(nn.Module):
         local_feat = rearrange(local_feat, 'bt c hw -> hw bt c')
         global_feat = rearrange(global_feat, 'bt c HW -> HW bt c')
         # text-guided
-   
+        assert len(text_feat.size()) == 3
+        # get textual embeddings
+        text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
+        text_feat = text_feat.repeat([1, t, 1, 1])
+        text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
+        text_feat = self.fusion_fc(text_feat)
+        text_feat = rearrange(text_feat, 'bt l c -> l bt c')
+
+
+        local_feat,text_feat = self.enhance_layer(local_feat,text_feat)
+
+
             # cross-attention
         fusion_feat = self.fusion_local_global(
             query=local_feat,
@@ -361,9 +357,9 @@ class Model6(nn.Module):
         local_image = self.reprocess_image3(local_image)
         return local_image
     
-def build_model5(config: dict):
+def build_model6(config: dict):
 
-    model = Model5()
+    model = Model6()
     if config["AVAILABLE_GPUS"] is not None and config["DEVICE"] == "cuda":
         model.to(device=torch.device(config["DEVICE"], distributed_rank()))
     else:
