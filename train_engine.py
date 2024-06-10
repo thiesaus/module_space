@@ -12,7 +12,7 @@ from model.utils import get_model, save_checkpoint, load_checkpoint
 import numpy as np
 # from model.model4 import Model4,build_model4
 # from model.model5 import Model5,build_model5
-from model.textual_image_model import Textual_Image_Model,build_textual_image_model
+from model.text_img import Textual_Image_Model,build_textual_image_model
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
 from model.criterion import ModuleCriterion,build_criterion
@@ -23,7 +23,7 @@ from model.loss import SimilarityLoss
 from model.accuracy import test_accuracy
 from data.dataloader import get_dataloader
 
-from model.test_hook import test
+# from model.test_hook import test
 
 sim_loss = SimilarityLoss(
     rho=None,
@@ -85,7 +85,7 @@ def train(config: dict):
         # Set the project where this run will be logged
         project="module_space", 
         # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-        name=f"text_encoder2_"+str(config["NUM_LAYERS"])+"_layers", 
+        name=f"i_dunno_"+str(config["NUM_LAYERS"])+"_layers", 
         # Track hyperparameters and run metadata
         config={
         "architecture": "Transformer",
