@@ -7,23 +7,26 @@ from torch.nn import functional as F
 from model.position_embedding import build
 
 
+class LayerNorm(nn.Module):
+    def __init__(self, d_model):
+        super(LayerNorm, self).__init__()
+        self.a_2 = nn.Parameter(torch.ones(d_model))
+        self.b_2 = nn.Parameter(torch.zeros(d_model))
+        self.eps = 1e-6
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+        
+
 class AddNorm(nn.Module):
     def __init__(self, d_model, dropout=0.01):
         super(AddNorm, self).__init__()
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(d_model)
+        self.layer_norm = LayerNorm(d_model)
 
-    def forward(self, X, Y):
+    def forward(self, Y, X):
         return self.layer_norm(self.dropout(Y) + X)
-
-class MulNorm(nn.Module):
-    def __init__(self, d_model, dropout=0.01):
-        super(MulNorm, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(d_model)
-
-    def forward(self, X, Y):
-        return self.layer_norm(self.dropout(Y) * X)
 
 class FeedForwardNetwork(nn.Module):
     def __init__(self, d_model, dropout=0.1):
@@ -31,15 +34,10 @@ class FeedForwardNetwork(nn.Module):
         hidden=1024
         self.linear1 = nn.Linear(d_model, hidden)
         self.linear2 = nn.Linear(hidden, d_model)
-        self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
-        x = self.linear1(x)
-        x = self.relu(x)
-        x = self.dropout(x)
-        x = self.linear2(x)
-        return x
+        return self.linear2(self.dropout(self.linear1(x).relu()))
     
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model, n_heads, dropout=0.1,batch_first=True):
