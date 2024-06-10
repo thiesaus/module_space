@@ -37,7 +37,7 @@ def test_accuracy(model,dataloader, save_img=False):
                 global_image=data['global_images'].cuda().repeat_interleave(len(expressions), dim=0),
                 sentences=expressions,
             )
-            logits = model(inputs)['logits'].cpu()
+            logits = model(inputs)['scores'].cpu()
             # evaluate
             TP += ((logits >= 0) * (labels == 1)).sum().item()
             FP += ((logits >= 0) * (labels == 0)).sum().item()
