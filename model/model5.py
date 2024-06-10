@@ -200,14 +200,14 @@ class Model5(nn.Module):
                 )
         b= x['local_images'].shape[0]
         visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
-        logits = F.cosine_similarity(visual_feat, textual_hidden,dim=-1)
-        temp=torch.zeros(logits.shape[1],device=self.device)
-        for i in range(logits.shape[0]):
-            temp= temp+logits[i]
-        logits=temp/logits.shape[0]
+        scores = F.cosine_similarity(visual_feat, textual_hidden,dim=-1)
+        temp=torch.zeros(scores.shape[1],device=self.device)
+        for i in range(scores.shape[0]):
+            temp= temp+scores[i]
+        scores=temp/scores.shape[0]
             
 
-        output['logits'] = logits
+        output['scores'] = scores
         output['vis_feat'] = visual_feat
         output['text_feat'] = textual_feat
         return output
