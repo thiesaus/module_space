@@ -294,6 +294,9 @@ class Textual_Image_Model(nn.Module):
 
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
+
+
+        self.cross_attn = nn.MultiheadAttention(self.encoder_dim, 4, dropout=0.1)
     def _freeze_params(self):
          for p in list(self.image_model.parameters()) + \
                  list(self.bert_model.parameters()) :
@@ -305,7 +308,7 @@ class Textual_Image_Model(nn.Module):
         #         nn.LayerNorm(1024, eps=1e-12),
         #     )
         # else:
-        return nn.Linear(self.encoder_dim, 1024)
+        return     nn.Linear(self.encoder_dim, 1024)
 
     def get_text_fc(self):
         return nn.Sequential(
@@ -315,7 +318,7 @@ class Textual_Image_Model(nn.Module):
         )
     def st_pooling(self, feat, bs):
         # spatial pooling
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()  # [bt,c,l]->[bt,c]
+        feat = F.adaptive_avg_pool1d(feat.permute(0,2,1), 1).squeeze()  # [bt,c,l]->[bt,c]
         # temporal pooling
         feat = rearrange(feat, '(b t) c -> b c t', b=bs)
         feat = F.adaptive_avg_pool1d(feat, 1).squeeze()  # [b,c]
@@ -324,7 +327,7 @@ class Textual_Image_Model(nn.Module):
         return feat
 
     def ts_pooling(self, feat, bs):
-        feat = F.adaptive_avg_pool1d(feat, 1).squeeze()  # [bt,c,l]->[bt,c]
+        feat = F.adaptive_avg_pool1d(feat.permute(0,2,1), 1).squeeze()  # [bt,c,l]->[bt,c]
         # temporal pooling
         feat = rearrange(feat, '(b t) c -> b c t', b=bs)
         feat = F.adaptive_avg_pool1d(feat, 1).squeeze()  # [b,c]
@@ -377,15 +380,21 @@ class Textual_Image_Model(nn.Module):
         texts_feat = texts_feat.unsqueeze(0)
         texts_feat= texts_feat.repeat(n,1,1,1)
         texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
-        texts_feat= self.position_embedding_text(texts_feat)
         check_hidden_feat = texts_feat.clone()
+        texts_feat= self.position_embedding_text(texts_feat)
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         # texts_feat = self.position_embedding_text(texts_feat)
-        imgs_feat_clone = imgs_feat.clone()
+        
+        fused_feature = self.cross_attn(query=imgs_feat, key=texts_feat, value=texts_feat)[0]
+        fused_feature= fused_feature * imgs_feat
+        fused_feature = self.st_pooling(fused_feature, b)
+        check_hidden_feat = self.ts_pooling(check_hidden_feat, b)
+
+        # logits = F.cosine_similarity(check_hidden_feat, fused_feature)
 
         # 3. Enhance Image and Text Features
-        imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
+        # imgs_feat,texts_feat = self.fusion_image_layer(imgs_feat,texts_feat)
         # 3.1 Enrich Layer
         # hidden_feat = self.enrich_layer(imgs_feat,texts_feat)
         # texts_feat = self.enrich_text_layer(texts_feat)
@@ -397,12 +406,13 @@ class Textual_Image_Model(nn.Module):
         # enhanced_text_feat = self.query_enhance(texts_feat,decoder_feats,decoder_feats)[0] * texts_feat
 
 
-        logits = CosineSimilarity.forward(check_hidden_feat, imgs_feat,device=self.device,n=n) 
+        # logits = CosineSimilarity.forward(check_hidden_feat, fused_feature,device=self.device,n=n) 
+        logits = F.cosine_similarity(check_hidden_feat, fused_feature)
 
         # 4. Contrastive Loss
         if self.training:
-            loss=self.constrasive_loss(texts_feat,imgs_feat,labels,n=n)
-            return dict({"logits": logits,"loss":loss}  )
+            # loss=self.constrasive_loss(texts_feat,imgs_feat,labels,n=n)
+            return dict({"logits": logits,"loss":0}  )
         else:
             return dict({"logits": logits})
 
