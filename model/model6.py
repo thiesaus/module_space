@@ -273,6 +273,8 @@ class Model6(nn.Module):
         fusion_feat = fusion_feat + local_feat  # [HW,bt,c]
 
         fusion_feat,_,_= self.decoder_layer((fusion_feat,local_feat,text_feat ))
+        fusion_feat = local_feat * fusion_feat
+        fusion_feat = rearrange(fusion_feat, 'l bt c -> bt c l')
         # text-guided
         # if kum_mode in ('cascade attention', 'cross correlation'):
         # fusion_feat= self.cross_modal_fusion(
