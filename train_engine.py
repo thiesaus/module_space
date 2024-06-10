@@ -312,7 +312,7 @@ def train_one_epoch(model: Textual_Image_Model, train_states: dict, max_norm: fl
         # loss_dict,log_dict=criterion.get_loss_and_log()
         logits = model_outputs['logits']
         contrastive_loss = model_outputs['loss']
-        loss =sim_loss(logits, targets) + contrastive_loss
+        loss =sim_loss(logits, targets) 
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())

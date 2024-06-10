@@ -354,7 +354,11 @@ class Textual_Image_Model(nn.Module):
         self._freeze_params()
         #Image  Fusion Attention
        
-        self.position_embedding_image =build(self.encoder_dim)
+        local_reso = 4 * 4
+        local_scale = local_reso ** -0.5
+        self.pos_emb_local = nn.Parameter(local_scale * torch.randn(local_reso))
+
+        # self.position_embedding_image =build(self.encoder_dim)
         self.position_embedding_text = build(self.encoder_dim)
         self.fusion_image_layer = SemiFusionLayer(self.encoder_dim,self.num_encoder_layer,self.device)
         self.constrasive_loss = ContrastiveLoss()
@@ -380,6 +384,14 @@ class Textual_Image_Model(nn.Module):
          for p in list(self.image_model.parameters()) + \
                  list(self.bert_model.parameters()) :
             p.requires_grad = False
+
+
+    def position_embedding_image(self, x):
+        y= x.permute(0,2,1) + self.pos_emb_local
+        return y.permute(0,2,1)
+
+
+
     def get_img_fc(self, use_ln=True):
         # if use_ln:
         #     return nn.Sequential(
@@ -449,7 +461,7 @@ class Textual_Image_Model(nn.Module):
         texts_feat=self.text_encoder(texts,n) # [m,64,768]
         imgs_feat, texts_feat = self.postprocessing_layer(imgs_feat,texts_feat)
         check_hidden_feat = texts_feat.clone()
-        texts_feat= self.position_embedding_text(texts_feat)
+        # texts_feat= self.position_embedding_text(texts_feat)
 
         imgs_feat = self.position_embedding_image(imgs_feat)
         # texts_feat = self.position_embedding_text(texts_feat)
