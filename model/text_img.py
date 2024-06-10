@@ -253,13 +253,91 @@ class SemiFusionLayer(nn.Module):
     
     def forward(self,x1,x2):
         return self.fusionlayer((x1,x2))
+    
+class BasicBlock(nn.Module):
+    def __init__(self, c_in, c_out, is_downsample=False):
+        super(BasicBlock, self).__init__()
+        self.is_downsample = is_downsample
+        if is_downsample:
+            self.conv1 = nn.Conv2d(
+                c_in, c_out, 3, stride=2, padding=1, bias=False)
+        else:
+            self.conv1 = nn.Conv2d(
+                c_in, c_out, 3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(c_out)
+        self.relu = nn.ReLU(True)
+        self.conv2 = nn.Conv2d(c_out, c_out, 3, stride=1,
+                               padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(c_out)
+        if is_downsample:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(c_in, c_out, 1, stride=2, bias=False),
+                nn.BatchNorm2d(c_out)
+            )
+        elif c_in != c_out:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(c_in, c_out, 1, stride=1, bias=False),
+                nn.BatchNorm2d(c_out)
+            )
+            self.is_downsample = True
+
+    def forward(self, x):
+        y = self.conv1(x)
+        y = self.bn1(y)
+        y = self.relu(y)
+        y = self.conv2(y)
+        y = self.bn2(y)
+        if self.is_downsample:
+            x = self.downsample(x)
+        return F.relu(x.add(y), True)
+
+
+def make_layers(c_in, c_out, repeat_times, is_downsample=False):
+    blocks = []
+    for i in range(repeat_times):
+        if i == 0:
+            blocks += [BasicBlock(c_in, c_out, is_downsample=is_downsample), ]
+        else:
+            blocks += [BasicBlock(c_out, c_out), ]
+    return nn.Sequential(*blocks)
+
+
+class PostprocessingLayer(nn.Module):
+    def __init__(self,d_model,out_d,device):
+        super(PostprocessingLayer, self).__init__()
+        self.d_model=d_model
+        self.device=device
+
+        # Image Postprocessing
+        # self.image_process_layer= nn.Sequential(*[
+        #     make_layers(d_model, d_model, 2, is_downsample=False),
+        #     make_layers(d_model, d_model, 2, is_downsample=True),
+        #     make_layers(d_model, d_model, 2, is_downsample=True),
+        #     make_layers(d_model , d_model , 2, is_downsample=True)
+        # ])
+        self.image_process_layer=make_layers(d_model, out_d, 2, is_downsample=True)
+        
+        # Text Postprocessing
+        self.text_process_layer= nn.Sequential(*[
+            nn.Linear(d_model, 1024),
+            nn.Linear(1024, out_d),
+
+        ])
+
+        
+    def forward(self,imgs_feat,text_feat):
+        imgs_feat = rearrange(imgs_feat, 'b (h w) c -> b c h w',h=8)
+        imgs_feat = self.image_process_layer(imgs_feat)
+        imgs_feat = rearrange(imgs_feat, 'b c h w -> b (h w) c')
+        text_feat = self.text_process_layer(text_feat)
+        return (imgs_feat,text_feat)
 
 
 class Textual_Image_Model(nn.Module):
     def __init__(self, config):
         super(Textual_Image_Model, self).__init__()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.encoder_dim = 768
+        self.encoder_dim = 1024
         self.num_encoder_layer=config["NUM_LAYERS"][0]
         self.num_enrich_layer=config["NUM_LAYERS"][1]
         self.num_decoder_layer=config["NUM_LAYERS"][2]
@@ -294,9 +372,10 @@ class Textual_Image_Model(nn.Module):
 
         self.img_fc = self.get_img_fc()
         self.text_fc = self.get_text_fc()
+        self.pre_dim=768
+        self.postprocessing_layer = PostprocessingLayer(self.pre_dim,self.encoder_dim,self.device)
 
-
-        self.cross_attn = nn.MultiheadAttention(self.encoder_dim, 4, dropout=0.1)
+        self.cross_attn = nn.MultiheadAttention(self.encoder_dim, 4, dropout=0.1,batch_first=True)
     def _freeze_params(self):
          for p in list(self.image_model.parameters()) + \
                  list(self.bert_model.parameters()) :
@@ -338,26 +417,18 @@ class Textual_Image_Model(nn.Module):
     def images_encoder(self,images):
         inputs = self.image_processor(images, return_tensors="pt",do_rescale=False).to(self.device)
         outputs= self.image_model(**inputs)
-        return outputs.last_hidden_state.clone()
+        return outputs.last_hidden_state
     
-    def text_encoder(self,text):
+    def text_encoder(self,text,n):
         inputs = self.text_tokenizer.batch_encode_plus(text,max_length=64,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {k: inputs[k] for k in ['input_ids', 'attention_mask']}
         outputs = self.bert_model(**tokenizer_input)
-        outputs=outputs.last_hidden_state.clone()
-        outputs = self.text_projection(outputs)
-
-        return outputs
+        outputs=outputs.last_hidden_state
+        texts_feat = outputs.unsqueeze(0)
+        texts_feat= texts_feat.repeat(n,1,1,1)
+        texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
+        return texts_feat
     
-    def lgqselect(self,imgs_feat,texts_feat,num_proposals=5):
-        '''
-        imgs_feat: [bs,ln,c]
-        texts_feat: [bs,lm,c]
-        '''
-        logits = torch.einsum("bic,btc->bit", imgs_feat, texts_feat) # [bs,ln,lm]
-        logit_per_img = logits.max(-1)[0] # [bs,ln]
-        topk_proposals = torch.topk(logit_per_img, num_proposals, dim=-1)[1]
-        return topk_proposals
 
 
     def forward(self,x):
@@ -368,7 +439,6 @@ class Textual_Image_Model(nn.Module):
         if self.training:
             labels = x['labels']
         b,n = imgs.size()[:2]
-        m = len(texts)
         
         # 1. Image Encoder
         imgs = rearrange(imgs, 'b n c h w -> (b n) c h w') #[bn,c,h,w]
@@ -376,10 +446,8 @@ class Textual_Image_Model(nn.Module):
         # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
         imgs_feat=self.images_encoder(imgs) # [ bn, 64, 768]
         # 2. Text Encoder
-        texts_feat=self.text_encoder(texts) # [m,64,768]
-        texts_feat = texts_feat.unsqueeze(0)
-        texts_feat= texts_feat.repeat(n,1,1,1)
-        texts_feat=rearrange(texts_feat, 'b n c h -> (b n) c h') 
+        texts_feat=self.text_encoder(texts,n) # [m,64,768]
+        imgs_feat, texts_feat = self.postprocessing_layer(imgs_feat,texts_feat)
         check_hidden_feat = texts_feat.clone()
         texts_feat= self.position_embedding_text(texts_feat)
 
