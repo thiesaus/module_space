@@ -442,9 +442,9 @@ class Textual_Image_Model(nn.Module):
         
         # 1. Image Encoder
         imgs = rearrange(imgs, 'b n c h w -> (b n) c h w') #[bn,c,h,w]
-        # norm_imgs=self.batch_norm2D(imgs)
-        # norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
-        imgs_feat=self.images_encoder(imgs) # [ bn, 64, 768]
+        norm_imgs=self.batch_norm2D(imgs)
+        norm_imgs = (norm_imgs - torch.min(norm_imgs)) / (torch.max(norm_imgs) - torch.min(norm_imgs))
+        imgs_feat=self.images_encoder(norm_imgs) # [ bn, 64, 768]
         # 2. Text Encoder
         texts_feat=self.text_encoder(texts,n) # [m,64,768]
         imgs_feat, texts_feat = self.postprocessing_layer(imgs_feat,texts_feat)
@@ -457,7 +457,7 @@ class Textual_Image_Model(nn.Module):
         fused_feature = self.cross_attn(query=imgs_feat, key=texts_feat, value=texts_feat)[0]
         fused_feature= fused_feature * imgs_feat
         fused_feature = self.st_pooling(fused_feature, b)
-        check_hidden_feat = self.ts_pooling(check_hidden_feat, b)
+        texts_feat = self.ts_pooling(texts_feat, b)
 
         # logits = F.cosine_similarity(check_hidden_feat, fused_feature)
 
@@ -475,7 +475,7 @@ class Textual_Image_Model(nn.Module):
 
 
         # logits = CosineSimilarity.forward(check_hidden_feat, fused_feature,device=self.device,n=n) 
-        logits = F.cosine_similarity(check_hidden_feat, fused_feature)
+        logits = F.cosine_similarity(texts_feat, fused_feature)
 
         # 4. Contrastive Loss
         if self.training:
