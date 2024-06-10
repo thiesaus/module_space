@@ -87,7 +87,7 @@ def train(config: dict):
         # Set the project where this run will be logged
         project="module_space", 
         # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-        name=f"add_enhance_"+str(config["NUM_LAYERS"])+"_layers", 
+        name=f"qr_modul_"+str(config["NUM_LAYERS"])+"_layers", 
         # Track hyperparameters and run metadata
         config={
         "architecture": "Transformer",
@@ -322,7 +322,7 @@ def train_one_epoch(model: Model7, train_states: dict, max_norm: float,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss)
+        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss.item())
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:

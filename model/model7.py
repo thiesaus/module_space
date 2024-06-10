@@ -103,6 +103,7 @@ class Model7(nn.Module):
         self.text_dim = 768
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=False)
+        self.k1_fc = self.get_text_fc(use_ln=False)
         self._freeze_text_encoder()
 
         self.fusion_local_global = nn.MultiheadAttention(
@@ -192,12 +193,17 @@ class Model7(nn.Module):
         output = dict()
         imgs= x['local_images']
         texts = x['sentences']
+        labels = None
+        if self.training:
+            labels = x['labels']
         b,n = imgs.size()[:2]
         qr_imgs = self.make_qr_image(texts)
+        qr_imgs = qr_imgs.unsqueeze(1).repeat(1,n,3,1,1)
+        qr_imgs = rearrange(qr_imgs,"b n c h w -> (b n) c h w")
         textual_hidden, textual_feat = self.textual_encoding(texts,n)
    
-        visual_feat = self.visual_local_global(
-                    x['local_images'], x['global_image'], textual_feat
+        visual_feat,loss = self.visual_local_global(
+                    x['local_images'], qr_imgs, textual_feat,labels=labels
                 )
         # visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
         k1 = rearrange(visual_feat,"(b n) c -> n b c",b=b)
@@ -212,8 +218,20 @@ class Model7(nn.Module):
         output['scores'] = scores
         output['vis_feat'] = visual_feat
         output['text_feat'] = textual_feat
-        output['loss']=0
+        output['loss']=loss
         return output
+    def ts_pooling(self, feat, bs):
+        # spatial pooling
+        feat = F.adaptive_avg_pool1d(feat, 1)  # [bt,c,l]->[bt,c]
+        # feat = rearrange(feat, 'b c t -> (b t) c')
+        # temporal pooling
+        # feat = rearrange(feat, '(b t) c -> b c t', b=bs)
+        feat = F.adaptive_avg_pool1d(feat, 1)  # [b,c]
+        feat = rearrange(feat, 'b c t -> (b t) c')
+
+        # projection
+        feat = self.k1_fc(feat)
+        return feat
 
     def st_pooling(self, feat, bs):
         # spatial pooling
@@ -241,18 +259,18 @@ class Model7(nn.Module):
         vis_feat = rearrange(vis_feat, 'l bt c -> bt c l')
         return vis_feat
       
-    def visual_local_global(self, local_img, global_img, text_feat=None):
+    def visual_local_global(self, local_img, global_img, text_feat=None,labels=None):
         # b, t = global_img.size()[:2]
         # spatial encoding
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
-        b, t = global_img.size()[:2]
+        b, t = local_img.size()[:2]
         local_img = rearrange(local_img, 'b t c h w -> (b t) c h w')
         local_img=(local_img-  local_img.min())/ (local_img.max() - local_img.min())
         local_feat =  self.process_image(local_img);  # [bt,c,7,7]
         # local_feat=rearrange(local_feat,"b (h w) c -> b c h w",h=8)
         # bt, c, h, w = local_feat.size()
-        global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
-        global_img=(global_img-  global_img.min())/ (global_img.max() - global_img.min())
+        # global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
+        # global_img=(global_img-  global_img.min())/ (global_img.max() - global_img.min())
 
         global_feat =  self.process_image(global_img); 
         # global_feat = torch.stack([global_feat for _ in range(b)], dim=1).squeeze(0)
@@ -286,6 +304,7 @@ class Model7(nn.Module):
             value=global_feat,
         )[0]
         fusion_feat = fusion_feat + local_feat  # [HW,bt,c]
+        decode= fusion_feat.clone()
         # text-guided
         # if kum_mode in ('cascade attention', 'cross correlation'):
         fusion_feat= self.cross_modal_fusion(
@@ -295,10 +314,17 @@ class Model7(nn.Module):
         #     fusion_feat = rearrange(fusion_feat, 'HW bt c -> bt c HW')
         fusion_feat = self.st_pooling(fusion_feat, bs=b)
         if self.training:
-            return fusion_feat
+
+            k1 = rearrange(decode,"hw (b n) c -> n b (hw c)",b=b)
+            k2 = rearrange(text_feat,"hw (b n) c -> n b (hw c)",b=b)
+            distance = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
+    
+            loss_contrastive = torch.mean((1 - labels) * torch.pow(distance, 2) +
+                                        (labels) * torch.pow(torch.clamp(1 - distance, min=0.0), 2))
+            return fusion_feat,loss_contrastive
         else:
             fusion_feat = F.normalize(fusion_feat, p=2, dim=-1)
-            return fusion_feat
+            return fusion_feat,torch.tensor(0)
 
     def textual_encoding(self, texts,n):
         # x_hidden, x = self.clip.encode_text_2(tokens, self.opt.truncation)
