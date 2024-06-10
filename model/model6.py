@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from utils.utils import distributed_rank
 from einops import rearrange
 from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  RobertaModel
-from model.func import FusionLayer
+from model.func import FusionLayerBlock
 
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
@@ -125,7 +125,7 @@ class Model6(nn.Module):
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         self.fusion_ffn = FFN(self.img_dim, 0.1)
 
-        self.enhance_layer=FusionLayer(self.feature_dim,4,self.device,4,0.1,batch_first=False)
+        self.enhance_layer= nn.Sequential(*[FusionLayerBlock(self.feature_dim,4,0.1,False) for _ in range(4)])
     def _freeze_text_encoder(self):
         """
         These parameters are not frozen:
@@ -261,9 +261,7 @@ class Model6(nn.Module):
         text_feat = self.fusion_fc(text_feat)
         text_feat = rearrange(text_feat, 'bt l c -> l bt c')
 
-
-        local_feat,text_feat = self.enhance_layer(local_feat,text_feat)
-
+        local_feat,text_feat = self.enhance_layer((local_feat,text_feat))
 
             # cross-attention
         fusion_feat = self.fusion_local_global(

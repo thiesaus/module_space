@@ -88,7 +88,7 @@ class FusionLayerBlock(nn.Module):
     
 class FusionLayer(nn.Module):
     def __init__(self,d_model,num_layer,device,n_head=4,dropout=0.1,batch_first=True):
-        super(FusionLayer, self).__init__()
+        super(Ff).__init__()
         self.device=device
         self.d_model=d_model
         self.num_layer=num_layer
