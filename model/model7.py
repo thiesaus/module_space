@@ -83,10 +83,10 @@ class Model7(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
         self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
          #reprocess image
-        self.reprocess_image=make_layers(1024, 512, 2, is_downsample=False)
-        self.reprocess_image1=make_layers(512, 512, 2, is_downsample=True)
-        self.reprocess_image2=make_layers(512, 256, 2, is_downsample=True)
-        self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
+        self.reprocess_image=make_layers(1024, 1024, 2, is_downsample=False)
+        self.reprocess_image1=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image2=make_layers(1024, 1024, 2, is_downsample=True)
+        self.reprocess_image3=make_layers(1024 , 1024 , 2, is_downsample=True)
 
         #reprocess text
         self.text_linear = nn.Linear(768, 384).to(self.device)
@@ -118,7 +118,9 @@ class Model7(nn.Module):
         global_reso = 8 * 8
         global_scale = global_reso ** -0.5
         self.pos_emb_global = nn.Parameter(global_scale * randn(global_reso))
-
+        qr_reso = 8 * 8
+        qr_scale = qr_reso ** -0.5
+        self.pos_emb_qr = nn.Parameter(qr_scale * randn(qr_reso))
         # if self.opt.kum_mode == 'cascade attention':
         self.fusion_visual_textual = nn.MultiheadAttention(
             embed_dim=self.img_dim,
@@ -127,7 +129,7 @@ class Model7(nn.Module):
         )
         self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         self.fusion_ffn = FFN(self.img_dim, 0.1)
-
+        self.qr_imgs_fc=nn.Linear(self.img_dim,self.feature_dim)
         self.enhance_layer= nn.Sequential(*[FusionLayerBlock(self.feature_dim,4,0.1,False) for _ in range(4)])
 
         self.qr_transform= T.Compose([
@@ -146,40 +148,6 @@ class Model7(nn.Module):
         self.bert_model.eval()
         self.swinv2_model.eval()
 
-
-    def _init_weights_function(self, m):
-        if isinstance(m, nn.Linear):
-            nn.init.normal_(m.weight.data, 0, 0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.Conv1d):
-            fan_out = m.kernel_size[0] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-        elif isinstance(m, nn.Conv2d):
-            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-        elif isinstance(m, nn.BatchNorm1d):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        elif isinstance(m, nn.BatchNorm2d):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        elif isinstance(m, nn.LayerNorm):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        else:
-            for p in m.parameters():
-                if p.dim() > 1:
-                    nn.init.xavier_uniform_(p)
     def make_qr_image(self,texts):
         imgs=[]
         for text in texts:
@@ -187,7 +155,17 @@ class Model7(nn.Module):
             imgs_tensor =1- self.qr_transform(img.get_image())
             imgs.append(imgs_tensor)
         
-        return torch.stack(imgs)
+        return torch.stack(imgs).repeat(1,3,1,1)
+    def qr_code_encoder(self,qr_imgs,n):
+        qr_imgs = rearrange(qr_imgs, 'b c h w -> b c h w')
+        # local_img=(local_img-  local_img.min())/ (local_img.max() - local_img.min())
+        qr_feats =  self.process_image(qr_imgs);  # [bt,c,7,7]
+        qr_feat_hidden = self.qr_imgs_fc(qr_feats)
+        qr_feat_hidden = rearrange(qr_feat_hidden,"b (h w) c -> b c h w",h=8)
+        qr_feat_hidden = self.cnn_image(qr_feat_hidden)
+        qr_feat_hidden = rearrange(qr_feat_hidden,"b c h w -> b (c h w)")
+        # qr_imgs = qr_imgs.unsqueeze(1).repeat(1,n,1,1)
+        return qr_feat_hidden,qr_feats
 
     def forward(self, x, epoch=1e5):
         output = dict()
@@ -198,16 +176,16 @@ class Model7(nn.Module):
             labels = x['labels']
         b,n = imgs.size()[:2]
         qr_imgs = self.make_qr_image(texts)
-        qr_imgs = qr_imgs.unsqueeze(1).repeat(1,n,3,1,1)
-        qr_imgs = rearrange(qr_imgs,"b n c h w -> (b n) c h w")
-        textual_hidden, textual_feat = self.textual_encoding(texts,n)
+        qr_feat_hidden,qr_feats = self.qr_code_encoder(qr_imgs,n)
+        # qr_imgs = rearrange(qr_imgs,"b n c h w -> (b n) c h w")
+        # textual_hidden, textual_feat = self.textual_encoding(texts,n)
    
         visual_feat,loss = self.visual_local_global(
-                    x['local_images'], qr_imgs, textual_feat,labels=labels
+                    x['local_images'], x['global_image'], qr_feats,labels=labels
                 )
         # visual_feat = rearrange(visual_feat,'(b t) c -> t b c',b=b)
         k1 = rearrange(visual_feat,"(b n) c -> n b c",b=b)
-        k2 = rearrange(textual_hidden,"(b n) c -> n b c",b=b)
+        k2 = rearrange(qr_feat_hidden,"(b n) c -> n b c",b=b)
         scores = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
         # temp=torch.zeros(scores.shape[1],device=self.device)
         # for i in range(scores.shape[0]):
@@ -217,7 +195,7 @@ class Model7(nn.Module):
 
         output['scores'] = scores
         output['vis_feat'] = visual_feat
-        output['text_feat'] = textual_feat
+        output['qr_feat'] = qr_feats
         output['loss']=loss
         return output
     def ts_pooling(self, feat, bs):
@@ -259,17 +237,17 @@ class Model7(nn.Module):
         vis_feat = rearrange(vis_feat, 'l bt c -> bt c l')
         return vis_feat
       
-    def visual_local_global(self, local_img, global_img, text_feat=None,labels=None):
+    def visual_local_global(self, local_img, global_img, qr_feats=None,labels=None):
         # b, t = global_img.size()[:2]
         # spatial encoding
         # _global_feat=rearrange(_global_feat,"b (h w) c -> b c h w",h=8)
         b, t = local_img.size()[:2]
         local_img = rearrange(local_img, 'b t c h w -> (b t) c h w')
-        local_img=(local_img-  local_img.min())/ (local_img.max() - local_img.min())
+        # local_img=(local_img-  local_img.min())/ (local_img.max() - local_img.min())
         local_feat =  self.process_image(local_img);  # [bt,c,7,7]
         # local_feat=rearrange(local_feat,"b (h w) c -> b c h w",h=8)
         # bt, c, h, w = local_feat.size()
-        # global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
+        global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
         # global_img=(global_img-  global_img.min())/ (global_img.max() - global_img.min())
 
         global_feat =  self.process_image(global_img); 
@@ -287,15 +265,15 @@ class Model7(nn.Module):
         local_feat = rearrange(local_feat, 'bt c hw -> hw bt c')
         global_feat = rearrange(global_feat, 'bt c HW -> HW bt c')
         # text-guided
-        assert len(text_feat.size()) == 3
+        assert len(qr_feats.size()) == 3
         # get textual embeddings
-        text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
-        text_feat = text_feat.repeat([1, t, 1, 1])
-        text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        text_feat = self.fusion_fc(text_feat)
-        text_feat = rearrange(text_feat, 'bt l c -> l bt c')
+        qr_feats = qr_feats.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
+        qr_feats = qr_feats.repeat([1, t, 1, 1])
+        qr_feats = rearrange(qr_feats, 'b t hw c -> (b t) c hw')
+        qr_feats = qr_feats + self.pos_emb_qr
+        qr_feats = rearrange(qr_feats, 'bt c hw -> hw bt c')
 
-        local_feat,text_feat = self.enhance_layer((local_feat,text_feat))
+        # local_feat,text_feat = self.enhance_layer((local_feat,text_feat))
 
             # cross-attention
         fusion_feat = self.fusion_local_global(
@@ -304,24 +282,24 @@ class Model7(nn.Module):
             value=global_feat,
         )[0]
         fusion_feat = fusion_feat + local_feat  # [HW,bt,c]
-        decode= fusion_feat.clone()
+        # decode= fusion_feat.clone()
         # text-guided
         # if kum_mode in ('cascade attention', 'cross correlation'):
         fusion_feat= self.cross_modal_fusion(
-            fusion_feat, text_feat, b,t
+            fusion_feat, qr_feats, b,t
         )
         # else:
         #     fusion_feat = rearrange(fusion_feat, 'HW bt c -> bt c HW')
         fusion_feat = self.st_pooling(fusion_feat, bs=b)
         if self.training:
 
-            k1 = rearrange(decode,"hw (b n) c -> n b (hw c)",b=b)
-            k2 = rearrange(text_feat,"hw (b n) c -> n b (hw c)",b=b)
-            distance = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
+            # k1 = rearrange(decode,"hw (b n) c -> n b (hw c)",b=b)
+            # k2 = rearrange(text_feat,"hw (b n) c -> n b (hw c)",b=b)
+            # distance = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
     
-            loss_contrastive = torch.mean((1 - labels) * torch.pow(distance, 2) +
-                                        (labels) * torch.pow(torch.clamp(1 - distance, min=0.0), 2))
-            return fusion_feat,loss_contrastive
+            # loss_contrastive = torch.mean((1 - labels) * torch.pow(distance, 2) +
+            #                             (labels) * torch.pow(torch.clamp(1 - distance, min=0.0), 2))
+            return fusion_feat,torch.tensor(0)
         else:
             fusion_feat = F.normalize(fusion_feat, p=2, dim=-1)
             return fusion_feat,torch.tensor(0)
