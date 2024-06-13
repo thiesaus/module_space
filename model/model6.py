@@ -87,12 +87,23 @@ class Model6(nn.Module):
         self.reprocess_image3=make_layers(256 , 256 , 2, is_downsample=True)
 
         #reprocess text
-        self.text_linear = nn.Linear(768, 384).to(self.device)
-        self.text_linear1 = nn.Linear(384, 192).to(self.device)
-        self.text_linear2 = nn.Linear(192, 96).to(self.device)
-        self.text_linear3 = nn.Linear(96, 64).to(self.device)
-        self.text_linear4 = nn.Linear(4096, 2048).to(self.device)
-        self.text_linear5 = nn.Linear(2048, 1024).to(self.device)
+        self.text_linear_phase1=nn.Sequential(*[
+            nn.Linear(768, 384).to(self.device),
+            nn.GELU(),
+            nn.Linear(384, 192).to(self.device),
+            nn.GELU(),
+            nn.Linear(192, 96).to(self.device),
+            nn.GELU(),
+            nn.Linear(96, 64).to(self.device)
+            ])
+
+        self.text_linear_phase2=nn.Sequential(*[
+             nn.Linear(4096, 2048).to(self.device),
+             nn.GELU(),
+             nn.Linear(2048, 1024).to(self.device)
+        ])
+
+ 
         # self.text_linear6 = nn.Linear(1024, 512).to(self.device)
         # self.text_linear7 = nn.Linear(512, 256).to(self.device)
         self.feature_dim=1024
@@ -240,12 +251,7 @@ class Model6(nn.Module):
         global_img=(global_img-  global_img.min())/ (global_img.max() - global_img.min())
 
         global_feat =  self.process_image(global_img); 
-        # global_feat = torch.stack([global_feat for _ in range(b)], dim=1).squeeze(0)
-        # global_feat=rearrange(global_feat,"b (h w) c -> b c h w",h=8)
 
-        # global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
-        # global_feat = self.clip.visual(global_img, with_pooling=False)  # [bt,c,7,7]
-        # bt, c, H, W = global_feat.size()
         # rearrange
         local_feat = rearrange(local_feat, 'bt hw c -> bt c hw')
         global_feat = rearrange(global_feat, 'bt HW c -> bt c HW')
@@ -272,16 +278,11 @@ class Model6(nn.Module):
         )[0]
         fusion_feat = fusion_feat + local_feat  # [HW,bt,c]
 
-        # fusion_feat,_,_= self.decoder_layer((fusion_feat,local_feat,text_feat ))
-        # fusion_feat = local_feat * fusion_feat
-        # fusion_feat = rearrange(fusion_feat, 'l bt c -> bt c l')
-        # text-guided
-        # if kum_mode in ('cascade attention', 'cross correlation'):
+
         fusion_feat= self.cross_modal_fusion(
             fusion_feat, text_feat, b,t
         )
-        # else:
-        #     fusion_feat = rearrange(fusion_feat, 'HW bt c -> bt c HW')
+
         fusion_feat = self.st_pooling(fusion_feat, bs=b)
         if self.training:
             return fusion_feat
@@ -290,21 +291,11 @@ class Model6(nn.Module):
             return fusion_feat
 
     def textual_encoding(self, texts,n):
-        # x_hidden, x = self.clip.encode_text_2(tokens, self.opt.truncation)
-        # x = self.text_fc(x)
         text=self.text_encoder(texts)
-        # text_hidden = text.unsqueeze(0)
-        # text_hidden= text_hidden.repeat(n,1,1,1)
-        # text_hidden=rearrange(text_hidden, 'b n h c -> (b n) h c') 
-        text_hidden = self.text_linear(text)
-        text_hidden = self.text_linear1(text_hidden)
-        text_hidden = self.text_linear2(text_hidden)
-        text_hidden = self.text_linear3(text_hidden)
+        text_hidden = self.text_linear_phase1(text)
         text_hidden = rearrange(text_hidden,"b w c -> b (w c)")
-        text_hidden = self.text_linear4(text_hidden)
-        text_hidden = self.text_linear5(text_hidden)
-        # text = self.text_linear6(text)
-        # text = self.text_linear7(text)
+        text_hidden = self.text_linear_phase2(text_hidden)
+ 
         if self.training:
             return text_hidden,text
         else:
