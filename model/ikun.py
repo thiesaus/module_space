@@ -11,6 +11,15 @@ from clip.model import CLIP, convert_weights
 
 from einops import rearrange
 from utils.utils import distributed_rank
+from clip.model import AttentionPool2d
+
+
+class Id(AttentionPool2d):
+    def __init__(self, x=0,y=0,z=0):
+        super(Id, self).__init__(x,y,z)
+    def forward(self, x):
+        x = x.cuda()
+        return x
 
 
 def tokenize(text):
@@ -416,5 +425,5 @@ def build_modelIKUN(config: dict):
         model.to(device=torch.device(config["DEVICE"], distributed_rank()))
     else:
         model.to(device=torch.device(config["DEVICE"]))
-   
+    model.clip.visual.attnpool = Id().to(device=torch.device(config["DEVICE"]))
     return model
