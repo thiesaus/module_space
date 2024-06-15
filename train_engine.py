@@ -13,7 +13,7 @@ import numpy as np
 # from model.model4 import Model4,build_model4
 # from model.model5 import Model5,build_model5
 # from model.model6 import Model6,build_model6
-from model.model7 import Model7,build_model7
+from model.weird_fusion import Weird_Fusion_Module,build_weird_fusion_module
 # from model.textual_image_model import Textual_Image_Model,build_textual_image_model
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
@@ -42,7 +42,7 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_model7(config=config)
+    model = build_weird_fusion_module(config=config)
     
     # hook_test=test(model)
 
@@ -87,7 +87,7 @@ def train(config: dict):
         # Set the project where this run will be logged
         project="module_space", 
         # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-        name=f"weird_module_w_add_text", 
+        name=f"super_weird_module_w_enc_dec", 
         # Track hyperparameters and run metadata
         config={
         "architecture": "Transformer",
@@ -254,7 +254,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: Model7, train_states: dict, max_norm: float,
+def train_one_epoch(model: Weird_Fusion_Module, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
@@ -375,7 +375,7 @@ def train_one_epoch(model: Model7, train_states: dict, max_norm: float,
     output_dict["metric_log"]=dict(loss=metric_log.get_avg())
     return output_dict
 
-def test_one_epoch(model:Model7,dataloader_test: DataLoader,epoch):
+def test_one_epoch(model:Weird_Fusion_Module,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()
     # if (epoch + 1) % 1 == 0:
     p, r = test_accuracy(model, dataloader_test)
