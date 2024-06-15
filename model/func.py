@@ -19,7 +19,7 @@ class AddNorm(nn.Module):
     def __init__(self, d_model, dropout=0.01):
         super(AddNorm, self).__init__()
         self.dropout = nn.Dropout(dropout)
-        self.layer_norm = LayerNorm(d_model)
+        self.layer_norm = nn.LayerNorm(d_model)
 
     def forward(self, Y, X):
         return self.layer_norm(self.dropout(Y) + X)
@@ -212,3 +212,107 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
+    
+   
+class Weird_Attention(nn.Module):
+    def __init__(self, d_model, n_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % n_heads == 0, "The hidden size is not a multiple of the number of attention heads"
+
+        self.d_model = d_model
+        self.n_heads = n_heads
+        
+        self.attention_head_size = int(d_model / n_heads)
+        self.all_head_size = n_heads * self.attention_head_size
+
+        # global_local block (glb)
+        self.glb_q = nn.Linear(d_model, self.all_head_size)
+        self.glb_k = nn.Linear(d_model, self.all_head_size)
+        self.glb_v = nn.Linear(d_model, self.all_head_size)
+
+        # prompt_local block (plb)
+        self.plb_q = nn.Linear(d_model, self.all_head_size)
+        self.plb_k = nn.Linear(d_model, self.all_head_size)
+        self.plb_v = nn.Linear(d_model, self.all_head_size)
+
+        self.dense = nn.Linear(d_model, d_model)
+        self.glb_dropout = nn.Dropout(p=dropout)
+        self.plb_dropout = nn.Dropout(p=dropout)
+    def transpose_for_scores(self, x):
+        new_x_shape = x.size()[:-1] + (self.n_heads, self.attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(self,global_feat,local_feat,text_feat,batch_first=False):
+        '''
+        global_feat: [Seq_length x Batch_size x Hidden_size]
+        local_feat: [Seq_length x Batch_size x Hidden_size]
+        text_feat: [Seq_length x Batch_size x Hidden_size]
+        '''
+        if batch_first == False:
+            global_feat = global_feat.permute(1, 0, 2)  # [Batch_size x Seq_length x Hidden_size]
+            local_feat = local_feat.permute(1, 0, 2)
+            text_feat = text_feat.permute(1, 0, 2)
+
+        # global_local block (glb)
+        glb_mixed_q_layer = self.glb_q(global_feat)  # [Batch_size x Seq_length x Hidden_size]
+        glb_mixed_k_layer = self.glb_k(local_feat)  # [Batch_size x Seq_length x Hidden_size]
+        glb_mixed_v_layer = self.glb_v(local_feat)  # [Batch_size x Seq_length x Hidden_size]
+
+        # prompt_local block (plb)
+        plb_mixed_q_layer = self.plb_q(local_feat)
+        plb_mixed_k_layer = self.plb_k(text_feat)
+        plb_mixed_v_layer = self.plb_v(text_feat)
+
+
+        # global_local block (glb)
+        glb_q_layer = self.transpose_for_scores(
+            glb_mixed_q_layer)  # [Batch_size x Num_of_heads x Seq_length x Head_size]
+        glb_k_layer = self.transpose_for_scores(glb_mixed_k_layer)  # [Batch_size x Num_of_heads x Seq_length x Head_size]
+        glb_v_layer = self.transpose_for_scores(
+            glb_mixed_v_layer)  # [Batch_size x Num_of_heads x Seq_length x Head_size]
+
+        # prompt_local block (plb)
+        plb_q_layer = self.transpose_for_scores(plb_mixed_q_layer)
+        plb_k_layer = self.transpose_for_scores(plb_mixed_k_layer)
+        plb_v_layer = self.transpose_for_scores(plb_mixed_v_layer)
+
+        # global_local block (glb)
+        glb_attention_scores = torch.matmul(glb_q_layer, glb_k_layer.transpose(-1,-2)) # [Batch_size x Num_of_heads x Seq_length x Seq_length]
+        glb_attention_scores = glb_attention_scores / math.sqrt(self.attention_head_size) # [Batch_size x Num_of_heads x Seq_length x Seq_length]
+        glb_attention_probs = nn.Softmax(dim=-1)(glb_attention_scores) # [Batch_size x Num_of_heads x Seq_length x Seq_length]
+        glb_attention_probs = self.glb_dropout(glb_attention_probs) # [Batch_size x Num_of_heads x Seq_length x Seq_length]
+        bridge_value=glb_attention_probs
+
+        # prompt_local block (plb)
+        plb_attention_scores = torch.matmul(plb_q_layer, plb_k_layer.transpose(-1,-2))
+        plb_attention_scores = plb_attention_scores / math.sqrt(self.attention_head_size)
+        plb_attention_probs = nn.Softmax(dim=-1)(plb_attention_scores)
+        plb_attention_probs = self.plb_dropout(plb_attention_probs)
+
+        plb_context_enhanced=torch.matmul(bridge_value,plb_attention_probs)
+
+        # add value
+        glb_context_layer = torch.matmul(glb_attention_probs, glb_v_layer)  # [Batch_size x Num_of_heads x Seq_length x Head_size]
+        plb_context_layer = torch.matmul(plb_context_enhanced, plb_v_layer)
+
+
+        # glb context layer
+        glb_context_layer = glb_context_layer.permute(0, 2, 1,
+                                              3).contiguous()  # [Batch_size x Seq_length x Num_of_heads x Head_size]
+        glb_new_context_layer_shape = glb_context_layer.size()[:-2] + (
+        self.all_head_size,)  # [Batch_size x Seq_length x Hidden_size]
+        glb_context_layer = glb_context_layer.view(*glb_new_context_layer_shape)  # [Batch_size x Seq_length x Hidden_size]
+
+
+        # plb context layer
+        plb_context_layer = plb_context_layer.permute(0, 2, 1,
+                                              3).contiguous()  # [Batch_size x Seq_length x Num_of_heads x Head_size]
+        plb_new_context_layer_shape = plb_context_layer.size()[:-2] + (
+        self.all_head_size,)  # [Batch_size x Seq_length x Hidden_size]
+        plb_context_layer = plb_context_layer.view(*plb_new_context_layer_shape)  # [Batch_size x Seq_length x Hidden_size]
+
+        last_context_layer = glb_context_layer + plb_context_layer
+        output = self.dense(last_context_layer)
+
+        return output
