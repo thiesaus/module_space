@@ -12,6 +12,8 @@ from model.func import FusionLayerBlock
 import qrcode
 from qrcode.image.pure import PyPNGImage
 import torchvision.transforms as T
+from model.func import MLP, CausalSelfAttention
+
 
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
@@ -73,6 +75,20 @@ class FFN(nn.Module):
         x = self.norm(x)
         return x
 
+class TextSelfAttentionBlock(nn.Module):
+    def __init__(self, d_model,seq_length, num_heads=4, dropout=0.):
+        super().__init__()
+        self.d_model = d_model
+        self.ln_1 = nn.LayerNorm(self.d_model, bias=True)
+        self.attn = CausalSelfAttention(d_model,seq_length, num_heads, dropout=dropout)
+        self.ln_2 = nn.LayerNorm(self.d_model, bias=True)
+        self.mlp = MLP(d_model, dropout=dropout)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
+    
 class Model7(nn.Module):
     def __init__(self):
         super().__init__()
@@ -87,6 +103,25 @@ class Model7(nn.Module):
         self.reprocess_image1=make_layers(1024, 1024, 2, is_downsample=True)
         self.reprocess_image2=make_layers(1024, 1024, 2, is_downsample=True)
         self.reprocess_image3=make_layers(1024 , 1024 , 2, is_downsample=True)
+
+          #reprocess text
+        self.text_linear_phase1=nn.Sequential(*[
+            nn.Linear(768, 384).to(self.device),
+            nn.GELU(),
+            nn.Linear(384, 192).to(self.device),
+            nn.GELU(),
+            nn.Linear(192, 96).to(self.device),
+            nn.GELU(),
+            nn.Linear(96, 64).to(self.device)
+            ])
+
+        self.text_linear_phase2=nn.Sequential(*[
+             nn.Linear(4096, 2048).to(self.device),
+             nn.GELU(),
+             nn.Linear(2048, 1024).to(self.device)
+        ])
+
+
 
         #reprocess text
         self.text_linear = nn.Linear(768, 384).to(self.device)
@@ -178,7 +213,7 @@ class Model7(nn.Module):
         qr_imgs = self.make_qr_image(texts)
         qr_feat_hidden,qr_feats = self.qr_code_encoder(qr_imgs,n)
         # qr_imgs = rearrange(qr_imgs,"b n c h w -> (b n) c h w")
-        # textual_hidden, textual_feat = self.textual_encoding(texts,n)
+        textual_hidden, textual_feat = self.textual_encoding(texts,n)
    
         visual_feat,loss = self.visual_local_global(
                     x['local_images'], x['global_image'], qr_feats,labels=labels
