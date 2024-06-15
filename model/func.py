@@ -1,6 +1,8 @@
 
-import torch.nn as nn
+import math
 import torch
+import torch.nn as nn
+from torch.nn import functional as F
 class LayerNorm(nn.Module):
     def __init__(self, d_model):
         super(LayerNorm, self).__init__()
@@ -141,3 +143,72 @@ class DecoderLayer(nn.Module):
     
     def forward(self,x,imgs_feat,text_feat):
         return self.decoderlayer((x,imgs_feat,text_feat))
+    
+class CausalSelfAttention(nn.Module):
+
+    def __init__(self, d_model,seq_length,n_head=4,dropout=0.):
+        super().__init__()
+        self.d_model = d_model
+        self.n_head = n_head
+        self.dropout = dropout
+        self.bias=True
+        self.seq_length=seq_length
+        assert d_model % self.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(d_model, 3 * d_model, bias=self.bias)
+        # output projection
+        self.c_proj = nn.Linear(d_model, d_model, bias=self.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(self.dropout)
+        self.resid_dropout = nn.Dropout(self.dropout)
+        self.n_embd = d_model
+        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        if not self.flash:
+            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            self.register_buffer("bias", torch.tril(torch.ones(seq_length, seq_length))
+                                        .view(1, 1, seq_length, seq_length))
+
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+        else:
+            # manual implementation of attention
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att)
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+
+        # output projection
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+    
+class MLP(nn.Module):
+
+    def __init__(self, d_model,dropout=0.,bias=True):
+        super().__init__()
+        self.d_model = d_model
+        self.c_fc    = nn.Linear(d_model, 4 * d_model, bias=bias)
+        self.gelu    = nn.GELU()
+        self.c_proj  = nn.Linear(4 * d_model, d_model, bias=bias)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
