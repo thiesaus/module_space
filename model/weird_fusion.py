@@ -413,6 +413,7 @@ class Weird_Fusion_Module(nn.Module):
 
         local_feat,global_feat = self.visual_extract(x['local_images'],x['global_image'])
 
+
         local_feat,global_feat,text_feat = self.enhance_self_feature(local_feat,global_feat,text_feat)
       
 

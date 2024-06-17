@@ -13,7 +13,8 @@ import numpy as np
 # from model.model4 import Model4,build_model4
 # from model.model5 import Model5,build_model5
 # from model.model6 import Model6,build_model6
-from model.weird_fusion import Weird_Fusion_Module,build_weird_fusion_module
+# from model.weird_fusion import Weird_Fusion_Module,build_weird_fusion_module
+from model.gdino_base import GDino_Clone,build_gdino_clone
 # from model.textual_image_model import Textual_Image_Model,build_textual_image_model
 from torch.utils.data import DataLoader
 from utils.utils import convert_data ,plot_grad_flow
@@ -42,7 +43,7 @@ def train(config: dict):
 
     set_seed(config["SEED"])
 
-    model = build_weird_fusion_module(config=config)
+    model = build_gdino_clone(config=config)
     
     # hook_test=test(model)
 
@@ -183,7 +184,8 @@ def train(config: dict):
         
         if (epoch+1) % config["TEST_DIST"] ==0:
             p,r=test_one_epoch(model=model,dataloader_test=dataloader_test,epoch=epoch)
-            output_dict["test"]=dict(epoch=epoch,precision=p,recall=r)
+            f1_score = 2 * p * r / (p + r + 1e-6)
+            output_dict["test"]=dict(epoch=epoch,precision=p,recall=r,f1_score=f1_score)
         if config["WANDB"]:
             wandb.log(output_dict)
         scheduler.step()
@@ -254,7 +256,7 @@ def get_param_groups(config: dict, model: nn.Module) -> Tuple[List[Dict], List[s
     return param_groups, ["lr_backbone", "lr_fusion", "lr_middle_fusion", "lr"]
 
 
-def train_one_epoch(model: Weird_Fusion_Module, train_states: dict, max_norm: float,
+def train_one_epoch(model: GDino_Clone, train_states: dict, max_norm: float,
                     dataloader: DataLoader, criterion: ModuleCriterion, optimizer: torch.optim,
                     epoch: int, logger: Logger,
                     accumulation_steps: int = 1, 
@@ -375,7 +377,7 @@ def train_one_epoch(model: Weird_Fusion_Module, train_states: dict, max_norm: fl
     output_dict["metric_log"]=dict(loss=metric_log.get_avg())
     return output_dict
 
-def test_one_epoch(model:Weird_Fusion_Module,dataloader_test: DataLoader,epoch):
+def test_one_epoch(model:GDino_Clone,dataloader_test: DataLoader,epoch):
     torch.cuda.empty_cache()
     # if (epoch + 1) % 1 == 0:
     p, r = test_accuracy(model, dataloader_test)
