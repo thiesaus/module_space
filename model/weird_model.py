@@ -213,9 +213,9 @@ class Weird_Model(nn.Module):
 
          #reprocess image
 
-        self.cnn_image_local=nn.Sequential(*[make_layers(1024, 512, 2, is_downsample=False),
+        self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
-        self.cnn_image_global=nn.Sequential(*[make_layers(1024, 512, 2, is_downsample=False),
+        self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
         #reprocess text
         self.text_linear_phase1=nn.Sequential(*[
@@ -247,10 +247,10 @@ class Weird_Model(nn.Module):
         self.seq_length=64
        
         
-        local_reso = 8 * 8
+        local_reso = 4 * 4
         local_scale = local_reso ** -0.5
         self.pos_emb_local = nn.Parameter(local_scale * randn(local_reso))
-        global_reso = 8 * 8
+        global_reso = 4 * 4
         global_scale = global_reso ** -0.5
         self.pos_emb_global = nn.Parameter(global_scale * randn(global_reso))
 
@@ -321,19 +321,20 @@ class Weird_Model(nn.Module):
         global_feat =  self.process_image(global_img); 
       
         # rearrange
-        local_feat = rearrange(local_feat, 'bt hw c -> bt c hw')
-        global_feat = rearrange(global_feat, 'bt HW c -> bt c HW')
+        local_feat = rearrange(local_feat, 'bt (h w) c -> bt c h w',h=8)
+        local_feat = self.cnn_image_local(local_feat)
+
+        global_feat = rearrange(global_feat, 'BT (H W) C-> BT C H W',H=8)
+        global_feat = self.cnn_image_global(global_feat)
+
+        local_feat = rearrange(local_feat, 'bt c h w -> bt c (h w)')
+        global_feat = rearrange(global_feat, 'bt C H W -> bt C (H W)')
+
         local_feat = local_feat + self.pos_emb_local
         global_feat = global_feat + self.pos_emb_global
 
-        local_feat = rearrange(local_feat, 'bt c (h w) -> bt c h w',h=8)
-        local_feat = self.cnn_image_local(local_feat)
-
-        global_feat = rearrange(global_feat, 'BT C (H W) -> BT C H W',H=8)
-        global_feat = self.cnn_image_global(global_feat)
-
-        local_feat = rearrange(local_feat, 'bt c h w -> bt (h w) c')
-        global_feat = rearrange(global_feat, 'bt c H W -> bt (H W) c')
+        local_feat = rearrange(local_feat, 'bt c hw -> bt hw c')
+        global_feat = rearrange(global_feat, 'bt C HW -> bt HW C')
         return local_feat,global_feat
 
     def self_attentions(self, global_feat,local_feat,text_feat):
@@ -510,8 +511,8 @@ class Weird_Model(nn.Module):
     def process_image(self,image):
 
         temp=self.image_encoder(image)
-        padded_temp = F.pad(temp, (0, 256, 0, 0, 0, 0), mode='constant', value=0)
-        return padded_temp
+        # padded_temp = F.pad(temp, (0, 256, 0, 0, 0, 0), mode='constant', value=0)
+        return temp
     
     def image_encoder(self, image): # [1,49,768]
         inputs = self.image_processor(image, return_tensors="pt",do_rescale=False).to(self.device)    

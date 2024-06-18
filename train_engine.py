@@ -88,7 +88,7 @@ def train(config: dict):
         # Set the project where this run will be logged
         project="module_space", 
         # We pass a run name (otherwise it’ll be randomly assigned, like sunshine-lollypop-10)
-        name=f"weird_module_init", 
+        name=f"weird_module_readjust", 
         # Track hyperparameters and run metadata
         config={
         "architecture": "Transformer",
