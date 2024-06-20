@@ -114,9 +114,14 @@ class Weird_Attention(nn.Module):
         self.plb_k = nn.Linear(d_model, self.all_head_size)
         self.plb_v = nn.Linear(d_model, self.all_head_size)
 
-        self.dense = nn.Linear(d_model, d_model)
         self.glb_dropout = nn.Dropout(p=dropout)
         self.plb_dropout = nn.Dropout(p=dropout)
+
+
+        self.dense = nn.Linear(d_model, d_model)
+        self.mlp=MLP(d_model,dropout)
+        self.mlp_linear =nn.Linear(d_model, d_model)
+        
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.n_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
@@ -124,9 +129,9 @@ class Weird_Attention(nn.Module):
 
     def forward(self,global_feat,local_feat,text_feat,batch_first=False):
         '''
-        global_feat: [Seq_length x Batch_size x Hidden_size]
-        local_feat: [Seq_length x Batch_size x Hidden_size]
-        text_feat: [Seq_length x Batch_size x Hidden_size]
+        global_feat: [Batch_size x Seq_length x Hidden_size]
+        local_feat: [Batch_size x Seq_length x Hidden_size]
+        text_feat: [Batch_size x Seq_length x Hidden_size] 
         '''
         if batch_first == False:
             global_feat = global_feat.permute(1, 0, 2)  # [Batch_size x Seq_length x Hidden_size]
@@ -193,6 +198,8 @@ class Weird_Attention(nn.Module):
 
         last_context_layer = glb_context_layer + plb_context_layer
         output = self.dense(last_context_layer)
+        output = self.mlp(output)
+        output = self.mlp_linear(output)
 
         return output
 
@@ -204,7 +211,7 @@ class Weird_Model(nn.Module):
         super().__init__()
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_heads = 4
-        self.dropout = 0.
+        self.dropout = 0.1
         self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         self.swinv2_model =Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256").to(self.device)
         self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
@@ -398,71 +405,6 @@ class Weird_Model(nn.Module):
         feat = self.img_fc(feat)
         return feat
 
-    def cross_modal_fusion(self, vis_feat, text_feat, b,t):
-        # if mode == 'cascade attention':
-      
-        # fusion
-        fused_feat = self.fusion_visual_textual(
-            query=vis_feat,
-            key=text_feat,
-            value=text_feat,
-        )[0]
-        vis_feat = vis_feat * fused_feat
-        vis_feat = rearrange(vis_feat, 'l bt c -> bt c l')
-        return vis_feat
-      
-    def visual_local_global(self, local_img, global_img, text_feat=None):
- 
-        b, t = global_img.size()[:2]
-        local_img = rearrange(local_img, 'b t c h w -> (b t) c h w')
-        local_feat =  self.process_image(local_img);  # [bt,c,7,7]
-      
-        global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
-        global_feat =  self.process_image(global_img); 
-      
-        # rearrange
-        local_feat = rearrange(local_feat, 'bt hw c -> bt c hw')
-        global_feat = rearrange(global_feat, 'bt HW c -> bt c HW')
-        local_feat = local_feat + self.pos_emb_local
-        global_feat = global_feat + self.pos_emb_global
-
-        local_feat = rearrange(local_feat, 'bt c (h w) -> bt c h w',h=8)
-        local_feat = self.cnn_image_local(local_feat)
-
-        global_feat = rearrange(global_feat, 'BT C (H W) -> BT C H W',H=8)
-        global_feat = self.cnn_image_global(global_feat)
-
-        local_feat = rearrange(local_feat, 'bt c h w -> (h w) bt c')
-        global_feat = rearrange(global_feat, 'bt c H W -> (H W) bt c')
-        # text-guided
-        assert len(text_feat.size()) == 3
-        # get textual embeddings
-        text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
-        text_feat = text_feat.repeat([1, t, 1, 1])
-        text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        text_feat = self.fusion_fc(text_feat)
-        text_feat = rearrange(text_feat, 'bt l c -> l bt c')
-
-
-            # cross-attention
-        fusion_feat = self.fusion_local_global(
-            query=local_feat,
-            key=global_feat,
-            value=global_feat,
-        )[0]
-        fusion_feat = fusion_feat + local_feat  # [HW,bt,c]
-        fusion_feat = self.fusion_ffn(fusion_feat) +fusion_feat
-
-        fusion_feat= self.cross_modal_fusion(
-            fusion_feat, text_feat, b,t
-        )
-
-        fusion_feat = self.st_pooling(fusion_feat, bs=b)
-        if self.training:
-            return fusion_feat
-        else:
-            fusion_feat = F.normalize(fusion_feat, p=2, dim=-1)
-            return fusion_feat
 
     def textual_encoding(self, texts):
         text=self.text_encoder(texts)
