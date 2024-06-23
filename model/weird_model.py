@@ -9,7 +9,7 @@ from utils.utils import distributed_rank
 from einops import rearrange
 from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  RobertaModel
 from model.func import MLP,CausalSelfAttention
-
+from model.position_embedding import build
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
         super(BasicBlock, self).__init__()
@@ -92,6 +92,7 @@ class TextSelfAttentionBlock(nn.Module):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
+
     
 class Weird_Attention(nn.Module):
     def __init__(self, d_model, n_heads, dropout=0.1):
@@ -121,6 +122,12 @@ class Weird_Attention(nn.Module):
         self.dense = nn.Linear(d_model, d_model)
         self.mlp=MLP(d_model,dropout)
         self.mlp_linear =nn.Linear(d_model, d_model)
+
+        self.global_embedding = build(d_model, dropout=dropout)
+        self.local_embedding_1 = build(d_model, dropout=dropout)
+        self.local_embedding_2 = build(d_model, dropout=dropout)
+
+
         
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.n_heads, self.attention_head_size)
@@ -138,13 +145,18 @@ class Weird_Attention(nn.Module):
             local_feat = local_feat.permute(1, 0, 2)
             text_feat = text_feat.permute(1, 0, 2)
 
+        duplicate_local = local_feat
+        duplicate_local= self.local_embedding_1(duplicate_local)
+        local_feat = self.local_embedding_2(local_feat)
+        global_feat = self.global_embedding(global_feat)
+
         # global_local block (glb)
         glb_mixed_q_layer = self.glb_q(global_feat)  # [Batch_size x Seq_length x Hidden_size]
         glb_mixed_k_layer = self.glb_k(local_feat)  # [Batch_size x Seq_length x Hidden_size]
         glb_mixed_v_layer = self.glb_v(local_feat)  # [Batch_size x Seq_length x Hidden_size]
 
         # prompt_local block (plb)
-        plb_mixed_q_layer = self.plb_q(local_feat)
+        plb_mixed_q_layer = self.plb_q(duplicate_local)
         plb_mixed_k_layer = self.plb_k(text_feat)
         plb_mixed_v_layer = self.plb_v(text_feat)
 
@@ -372,9 +384,9 @@ class Weird_Model(nn.Module):
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
         text_feat = self.fusion_fc(text_feat)
 
-        global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
+        # global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
-        visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) * local_feat
+        visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True)
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
         vis_feat = self.st_pooling(vis_feat, bs=b)
         if not self.training:
