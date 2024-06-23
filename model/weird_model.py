@@ -283,6 +283,9 @@ class Weird_Model(nn.Module):
         self.text_attn_ = TextSelfAttentionBlock(self.feature_dim,self.seq_length, self.num_heads, dropout=self.dropout)
 
         self.weird_attn = Weird_Attention(self.feature_dim, self.num_heads, dropout=self.dropout)
+        self.decoder_layer= nn.TransformerDecoderLayer(d_model=self.feature_dim, nhead=self.num_heads,batch_first=True)
+        self.decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=6)
+
 
     def _freeze_text_encoder(self):
         """
@@ -386,7 +389,8 @@ class Weird_Model(nn.Module):
 
         # global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
-        visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) *local_feat
+        visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
+        visual_feat = self.decoder(visual_feat,text_feat) * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
         vis_feat = self.st_pooling(vis_feat, bs=b)
         if not self.training:
