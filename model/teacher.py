@@ -136,7 +136,7 @@ class NetworkCore(nn.Module):
         out_proj_channel = self.cfgs[-1][-1][0]
 
         self.in_proj = nn.Sequential(
-            nn.Conv1d(1, in_proj_channel, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv1d(in_proj_channel, in_proj_channel, kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm1d(in_proj_channel),
             nn.LeakyReLU(inplace=True),
         )
@@ -159,38 +159,59 @@ class NetworkCore(nn.Module):
         )
 
         self.classifier = nn.Linear(1024, num_classes)
+        self.out_linear = nn.Linear(1024,out_proj_channel)
 
     def forward(self, x):
         x = self.in_proj(x)
         x = self.layers(x)
         x = self.out_proj(x)
+        # x = self.out_linear(x)
         x = self.gap(x)
-        x = self.classifier(x)
+        x = self.out_linear(x)
 
         return x
 
 
-if __name__ == '__main__':
-    # in_channels, out_channel, kernel_size, stride, hidden_ratio, use_se, shuffle
+def build_network():
     cfgs = [
         [
-            [32, 64, 3, 2, 2, 1, 1],
-            [64, 64, 3, 1, 2, 1, 0],
-            [64, 64, 3, 1, 2, 1, 0]
-        ],
-        [
-            [64, 96, 3, 2, 2, 1, 1],
+            [256, 96, 3, 2, 2, 1, 1],
             [96, 96, 3, 1, 2, 1, 0],
             [96, 96, 3, 1, 2, 1, 0]
         ],
         [
             [96, 128, 3, 2, 2, 1, 1],
             [128, 128, 3, 1, 2, 1, 0],
+            [128, 128, 3, 1, 2, 1, 0]
+        ],        [
+            [128, 256, 3, 2, 2, 1, 1],
+            [256, 256, 3, 1, 2, 1, 0],
         ]
     ]
+    return NetworkCore(cfgs)
 
-    x = torch.rand((4, 1, 5000))
-    model = NetworkCore(cfgs)
-    print(sum(p.numel() for p in model.parameters() if p.requires_grad))
-    out = model(x)
-    print(out.shape)
+
+# if __name__ == '__main__':
+#     # in_channels, out_channel, kernel_size, stride, hidden_ratio, use_se, shuffle
+#     cfgs = [
+#         [
+#             [32, 64, 3, 2, 2, 1, 1],
+#             [64, 64, 3, 1, 2, 1, 0],
+#             [64, 64, 3, 1, 2, 1, 0]
+#         ],
+#         [
+#             [64, 96, 3, 2, 2, 1, 1],
+#             [96, 96, 3, 1, 2, 1, 0],
+#             [96, 96, 3, 1, 2, 1, 0]
+#         ],
+#         [
+#             [96, 128, 3, 2, 2, 1, 1],
+#             [128, 128, 3, 1, 2, 1, 0],
+#         ]
+#     ]
+
+#     x = torch.rand((4, 1, 5000))
+#     model = NetworkCore(cfgs)
+#     print(sum(p.numel() for p in model.parameters() if p.requires_grad))
+#     out = model(x)
+#     print(out.shape)

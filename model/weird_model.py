@@ -10,6 +10,8 @@ from einops import rearrange
 from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  RobertaModel
 from model.func import MLP,CausalSelfAttention
 from model.position_embedding import build
+from model.teacher import build_network
+
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
         super(BasicBlock, self).__init__()
@@ -236,6 +238,7 @@ class Weird_Model(nn.Module):
                                         make_layers(512, 256, 2, is_downsample=True)])
         self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
+        self.last_pooling=build_network()
         #reprocess text
         self.text_linear_phase1=nn.Sequential(*[
             nn.Linear(768, 384).to(self.device),
@@ -391,7 +394,8 @@ class Weird_Model(nn.Module):
         visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
         visual_feat = visual_feat * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
-        vis_feat = self.st_pooling(vis_feat, bs=b)
+        # vis_feat = self.st_pooling(vis_feat, bs=b)
+        vis_feat=self.last_pooling(vis_feat)
         if not self.training:
             vis_feat = F.normalize(vis_feat, p=2, dim=-1)
 
