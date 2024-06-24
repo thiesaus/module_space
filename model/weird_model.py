@@ -145,7 +145,7 @@ class Weird_Attention(nn.Module):
             local_feat = local_feat.permute(1, 0, 2)
             text_feat = text_feat.permute(1, 0, 2)
 
-        duplicate_local = local_feat
+        duplicate_local = local_feat.clone()
         duplicate_local= self.local_embedding_1(duplicate_local)
         local_feat = self.local_embedding_2(local_feat)
         global_feat = self.global_embedding(global_feat)
@@ -283,8 +283,7 @@ class Weird_Model(nn.Module):
         self.text_attn_ = TextSelfAttentionBlock(self.feature_dim,self.seq_length, self.num_heads, dropout=self.dropout)
 
         self.weird_attn = Weird_Attention(self.feature_dim, self.num_heads, dropout=self.dropout)
-        self.decoder_layer= nn.TransformerDecoderLayer(d_model=self.feature_dim, nhead=self.num_heads,batch_first=True)
-        self.decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=6)
+
 
 
     def _freeze_text_encoder(self):
@@ -387,10 +386,10 @@ class Weird_Model(nn.Module):
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
         text_feat = self.fusion_fc(text_feat)
 
-        # global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
+        global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
         visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
-        visual_feat = self.decoder(visual_feat,text_feat) * local_feat
+        visual_feat = visual_feat * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
         vis_feat = self.st_pooling(vis_feat, bs=b)
         if not self.training:
