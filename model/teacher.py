@@ -166,8 +166,11 @@ class NetworkCore(nn.Module):
         x = self.layers(x)
         x = self.out_proj(x)
         # x = self.out_linear(x)
-        x = self.gap(x)
+        # x = self.gap(x)
+        x=x.permute(0,2,1)
         x = self.out_linear(x)
+        x=torch.hstack([x,x])
+        x=x.permute(0,2,1)
 
         return x
 
@@ -175,7 +178,7 @@ class NetworkCore(nn.Module):
 def build_network():
     cfgs = [
         [
-            [256, 96, 3, 2, 2, 1, 1],
+            [768, 96, 3, 2, 2, 1, 1],
             [96, 96, 3, 1, 2, 1, 0],
             [96, 96, 3, 1, 2, 1, 0]
         ],

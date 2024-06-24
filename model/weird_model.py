@@ -238,7 +238,7 @@ class Weird_Model(nn.Module):
                                         make_layers(512, 256, 2, is_downsample=True)])
         self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
-        self.last_pooling=build_network()
+        self.global_pooling=build_network()
         #reprocess text
         self.text_linear_phase1=nn.Sequential(*[
             nn.Linear(768, 384).to(self.device),
@@ -348,14 +348,14 @@ class Weird_Model(nn.Module):
         local_feat = rearrange(local_feat, 'bt (h w) c -> bt c h w',h=8)
         local_feat = self.cnn_image_local(local_feat)
 
-        global_feat = rearrange(global_feat, 'BT (H W) C-> BT C H W',H=8)
-        global_feat = self.cnn_image_global(global_feat)
+        global_feat = rearrange(global_feat, 'BT (H W) C-> BT C (H W)',H=8)
+        global_feat = self.global_pooling(global_feat)
 
         local_feat = rearrange(local_feat, 'bt c h w -> bt c (h w)')
-        global_feat = rearrange(global_feat, 'bt C H W -> bt C (H W)')
+        # global_feat = rearrange(global_feat, 'bt C H W -> bt C (H W)')
 
         local_feat = local_feat + self.pos_emb_local
-        global_feat = global_feat + self.pos_emb_global
+        # global_feat = global_feat + self.pos_emb_global
 
         local_feat = rearrange(local_feat, 'bt c hw -> bt hw c')
         global_feat = rearrange(global_feat, 'bt C HW -> bt HW C')
@@ -394,8 +394,8 @@ class Weird_Model(nn.Module):
         visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
         visual_feat = visual_feat * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
-        # vis_feat = self.st_pooling(vis_feat, bs=b)
-        vis_feat=self.last_pooling(vis_feat)
+        vis_feat = self.st_pooling(vis_feat, bs=b)
+        # vis_feat=self.last_pooling(vis_feat)
         if not self.training:
             vis_feat = F.normalize(vis_feat, p=2, dim=-1)
 
