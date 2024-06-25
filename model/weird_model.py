@@ -10,7 +10,7 @@ from einops import rearrange
 from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  RobertaModel
 from model.func import MLP,CausalSelfAttention
 from model.position_embedding import build
-from model.teacher import build_network
+from model.teacher_copy import build_network
 
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
@@ -342,20 +342,20 @@ class Weird_Model(nn.Module):
         local_feat =  self.process_image(local_img);  # [bt,c,7,7]
       
         global_img = rearrange(global_img, 'B T C H W -> (B T) C H W')
-        global_feat =  self.process_image(global_img); 
+        global_feat =  self.process_image(global_img)
       
         # rearrange
         local_feat = rearrange(local_feat, 'bt (h w) c -> bt c h w',h=8)
         local_feat = self.cnn_image_local(local_feat)
 
-        global_feat = rearrange(global_feat, 'BT (H W) C-> BT C (H W)',H=8)
+        global_feat = rearrange(global_feat, 'BT (H W) C -> BT C (H W)',H=8)
         global_feat = self.global_pooling(global_feat)
 
         local_feat = rearrange(local_feat, 'bt c h w -> bt c (h w)')
         # global_feat = rearrange(global_feat, 'bt C H W -> bt C (H W)')
 
         local_feat = local_feat + self.pos_emb_local
-        # global_feat = global_feat + self.pos_emb_global
+        global_feat = global_feat + self.pos_emb_global
 
         local_feat = rearrange(local_feat, 'bt c hw -> bt hw c')
         global_feat = rearrange(global_feat, 'bt C HW -> bt HW C')
