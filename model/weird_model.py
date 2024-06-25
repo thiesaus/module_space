@@ -232,8 +232,10 @@ class Weird_Model(nn.Module):
 
          #reprocess image
 
-        self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
-                                        make_layers(512, 256, 2, is_downsample=True)])
+        self.cnn_image_local=nn.Sequential(*[make_layers(768, 640, 2, is_downsample=False),
+                                              make_layers(640,512 , 2, is_downsample=True),
+                                              make_layers(512,384 , 2, is_downsample=True),
+                                        make_layers(384, 256, 2, is_downsample=True)])
         self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
         #reprocess text
