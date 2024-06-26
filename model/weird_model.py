@@ -216,6 +216,29 @@ class Weird_Attention(nn.Module):
         return output
 
 
+class IdunNoBlock(nn.Module):
+    def __init__(self,n_model,n_heads=4,dropout=0.1,batch_first=True):
+        super(IdunNoBlock, self).__init__()
+
+        self.weird_attn = Weird_Attention(n_model, n_heads,dropout)
+        self.self_attn=nn.MultiheadAttention(n_model,num_heads=n_heads,dropout=dropout,batch_first=batch_first)
+        self.mlp=MLP(n_model,dropout)
+
+
+    def forward(self,pair):
+        local_feat,text_feat,global_feat=pair
+        y1= self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
+        y1 = y1 + local_feat
+
+
+        y2,_ = self.self_attn(y1,y1,y1)
+        y2 = y2 + y1
+
+       
+        y3=self.mlp(y2)
+        y3 = y2 + y3
+
+        return (y3,text_feat,global_feat)
 
 
 class Weird_Model(nn.Module):
@@ -282,9 +305,9 @@ class Weird_Model(nn.Module):
         self.local_add_norm_ = AddNorm(self.feature_dim, dropout=self.dropout)
         self.text_attn_ = TextSelfAttentionBlock(self.feature_dim,self.seq_length, self.num_heads, dropout=self.dropout)
 
-        self.weird_attn = Weird_Attention(self.feature_dim, self.num_heads, dropout=self.dropout)
+        # self.weird_attn = Weird_Attention(self.feature_dim, self.num_heads, dropout=self.dropout)
 
-
+        self.weird_layer= nn.Sequential(*[IdunNoBlock(self.feature_dim,self.num_heads,self.dropout,batch_first=True) for _ in range(4)])
 
     def _freeze_text_encoder(self):
         """
@@ -388,7 +411,11 @@ class Weird_Model(nn.Module):
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
-        visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
+        pair = (local_feat,text_feat,global_feat)
+
+        visual_feat,_,_ = self.weird_layer(pair)
+
+        # visual_feat = self.weird_attn(global_feat,local_feat,text_feat,batch_first=True) 
         visual_feat = visual_feat * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
         vis_feat = self.st_pooling(vis_feat, bs=b)
