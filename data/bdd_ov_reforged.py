@@ -177,11 +177,9 @@ class BDD_IDUNK(Dataset):
         self.mode = mode
         self.only_car = only_car  # 选择类别
         random.seed(config["SEED"])
-        self.eliminate_list=['b262f576-b0373824']
         self.overall=standardlize(config["BDD_JSON_PATH"],config["BDD_DATA_ROOT"])
-        for k in  self.eliminate_list:
-            if k in self.overall['data']:
-                del self.overall['data'][k]
+        self.frame_data=self._parse_videos()
+        self._eliminate_usseless_frame()
         test=random.sample(list(self.overall['data'].keys()), len(self.overall['data'].keys())//5)
         train=[x for x in list(self.overall['data'].keys()) if x not in test]
         self.videos=dict({'test':test,
@@ -189,10 +187,17 @@ class BDD_IDUNK(Dataset):
         })
         self.transform = {idx: get_transform(mode, self.opt, idx) for idx in (0, 1, 2)}
         # self.exp_key = 'expression_new'  # 经处理后的expression标签
-        self.frame_data=self._parse_videos()
         self.data = self._parse_data()
         self.data_keys = list(self.data.keys())
         # self.exp2id = {exp: idx for idx, exp in ID2EXP.items()}
+    def _eliminate_usseless_frame(self):
+        for title in self.videos[self.mode]:
+            framesIds=list(self.frame_data[title].keys())
+            for key in self.overall['data'][title].keys():
+                for frameId in self.overall['data'][title][key].keys():
+                    if int(frameId) not in framesIds:
+                        del self.overall['data'][title][key][frameId]
+
     def _parse_videos(self):
         temp=kkk()
         count=0
