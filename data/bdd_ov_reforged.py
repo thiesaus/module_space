@@ -141,11 +141,11 @@ def get_transform(mode, opt, idx):
             [1/std[i] for i in range(3)],
         )
 
-def extract_frame_image_from_video(video_path:str,frame_ids:list[int]):
+def extract_frame_image_from_video(video_path:str):
     cap = cv2.VideoCapture(video_path)
     frames = defaultdict()
     H,W = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    for i in frame_ids:
+    for i in range(0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), 10):
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
         if ret:
@@ -194,12 +194,7 @@ class BDD_IDUNK(Dataset):
         for title in self.videos[self.mode]:
             print("Extracted {}/{}".format(count,len(self.videos[self.mode])))
             count=count+1
-            key=[]
-            for k in self.overall['data'][title].keys():
-                if len(key)< len(list(self.overall['data'][title][k].keys())):
-                    key.extend(self.overall['data'][title][k].keys())
-            key=list(dict.fromkeys(key))
-            temp[title]=extract_frame_image_from_video(os.path.join(self.opt['BDD_DATA_ROOT'],'train','BDD','{}.mov'.format(title)),key)
+            temp[title]=extract_frame_image_from_video(os.path.join(self.opt['BDD_DATA_ROOT'],'train','BDD','{}.mov'.format(title)))
         return temp
     def _parse_data(self):
         # labels = json.load(open(self.opt["rf_kitti_json"]))
