@@ -191,7 +191,7 @@ class BDD_IDUNK(Dataset):
         self.data_keys = list(self.data.keys())
         # self.exp2id = {exp: idx for idx, exp in ID2EXP.items()}
     def _eliminate_usseless_frame(self):
-        for title in self.videos[self.mode]:
+        for title in self.frame_data.keys():
             framesIds=list(self.frame_data[title].keys())
             for key in self.overall['data'][title].keys():
                 for frameId in self.overall['data'][title][key].keys():
