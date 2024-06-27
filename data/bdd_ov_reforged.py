@@ -195,7 +195,7 @@ class BDD_IDUNK(Dataset):
         for title in self.frame_data.keys():
             framesIds=list(self.frame_data[title].keys())
             for key in self.overall['data'][title].keys():
-                for frameId in self.overall['data'][title][key].keys():
+                for frameId in list(self.overall['data'][title][key].keys()):
                     if int(frameId) not in framesIds:
                         del self.overall['data'][title][key][frameId]
 
