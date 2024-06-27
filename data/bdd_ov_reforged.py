@@ -35,7 +35,7 @@ def dddddd():
 
 def standardlize(json_path,data_root):
     overall= dict()
-    for i in ['train','val']:
+    for i in ['train']:
         temp_path=os.path.join(data_root,i,'BDD')
         array=[f.split('.')[0] for f in listdir(temp_path) if isfile(join(temp_path, f)) and f.endswith('.mov')]
         overall[i]=dict([('videos',array)])
@@ -43,7 +43,7 @@ def standardlize(json_path,data_root):
     with open(json_path, 'r') as f:
         data_pool = json.load(f)
 
-    for j in ['train','val']:
+    for j in ['train']:
         new_list=[]
         for i in data_pool['videos']:
             if i['metadata']['dataset'] == 'BDD' and i['name'].split('/')[2] in overall[j]['videos']:
@@ -52,14 +52,14 @@ def standardlize(json_path,data_root):
         overall[j]['videos']=new_list
     
     video_dict=dict()
-    for i in ['train','val']:
+    for i in ['train']:
         video_ids=[]
         for j in overall[i]['videos']:
             video_ids.append(j['id'])
         video_dict[i]=video_ids
 
     annotation_dict= dict()
-    for i in ['train','val']:
+    for i in ['train']:
         new_list=[]
         for j in data_pool['annotations']:
             if j['video_id'] in video_dict[i]:
@@ -70,14 +70,14 @@ def standardlize(json_path,data_root):
                 new_list.append(j)
         annotation_dict[i]=new_list
 
-    for i in ['train','val']:
+    for i in ['train']:
         overall[i]['annotations']=annotation_dict[i]
 
     category_mapping = {i['id']: i['name'] for i in data_pool['categories']}
     overall['categories']=category_mapping
 
     temp =dict()
-    for i in ['train','val']:
+    for i in ['train']:
         array=[]
         for j in overall[i]['annotations']:
             for k in overall[i]['videos']:
@@ -87,7 +87,7 @@ def standardlize(json_path,data_root):
             array.append(res)
         temp[i]=array
     
-    for i in ['train','val']:
+    for i in ['train']:
         overall[i]=temp[i]
     
     overall_dict=defaultdict()
@@ -141,11 +141,12 @@ def get_transform(mode, opt, idx):
             [1/std[i] for i in range(3)],
         )
 
-def extract_frame_image_from_video(video_path:str):
+def extract_frame_image_from_video(video_path:str,frame_ids):
     cap = cv2.VideoCapture(video_path)
     frames = defaultdict()
     H,W = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    for i in range(0, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)), 10):
+    print("exist path: {}, frame_ids : {}".format(os.path.exists(video_path),frame_ids))
+    for i in frame_ids:
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
         if ret:
@@ -194,7 +195,12 @@ class BDD_IDUNK(Dataset):
         for title in self.videos[self.mode]:
             print("Extracted {}/{}".format(count,len(self.videos[self.mode])))
             count=count+1
-            temp[title]=extract_frame_image_from_video(os.path.join(self.opt['BDD_DATA_ROOT'],'train','BDD','{}.mov'.format(title)))
+            key=[]
+            for k in  self.overall['data'][title].keys():
+                key.extend(list(self.overall['data'][title][k].keys()))
+
+            key=list(dict.fromkeys(key))
+            temp[title]=extract_frame_image_from_video(os.path.join(self.opt['BDD_DATA_ROOT'],'train','BDD','{}.mov'.format(title)),key)
         return temp
     def _parse_data(self):
         # labels = json.load(open(self.opt["rf_kitti_json"]))
