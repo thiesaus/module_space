@@ -296,7 +296,6 @@ class BDD_IDUNK(Dataset):
             step = sample_len // sample_num
             for idx in range(start_idx, stop_idx, step):
                 sampled_indices.append(idx + step // 2)
-        print("videos: {} __getitem__ {} w {} array: {}".format(video,self.frame_data[video].keys(),sampled_indices,[data['bbox'][idx][0] for idx in sampled_indices]))
 
         # load images
         images = [
@@ -369,7 +368,7 @@ class BDD_IDUNK(Dataset):
 
     def show_information(self):
         print(
-            f'===> Refer-KITTI ({self.mode}) <===\n'
+            f'===> BDD-100K ({self.mode}) <===\n'
             f"Number of identities: {len(self.data)}"
         )
 
