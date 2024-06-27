@@ -177,7 +177,11 @@ class BDD_IDUNK(Dataset):
         self.mode = mode
         self.only_car = only_car  # 选择类别
         random.seed(config["SEED"])
+        self.eliminate_list=['b262f576-b0373824']
         self.overall=standardlize(config["BDD_JSON_PATH"],config["BDD_DATA_ROOT"])
+        for k in  self.eliminate_list:
+            if k in self.overall['data']:
+                del self.overall['data'][k]
         test=random.sample(list(self.overall['data'].keys()), len(self.overall['data'].keys())//5)
         train=[x for x in list(self.overall['data'].keys()) if x not in test]
         self.videos=dict({'test':test,
