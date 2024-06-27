@@ -37,6 +37,10 @@ if __name__ == "__main__":
     config["NUM_LAYERS"]=[4,4,4]
     config["TEST_DIST"]=1
     config["WANDB"]=False
+    # ==== BDD ====
+    config['BDD_DATA_ROOT']='D:\\Thesis\\Datadir\\bdd100k-videos-train_val\\videos'
+    config['BDD_JSON_PATH']="C:\\Users\\phamp\\Desktop\\TestDataloader\\tao_train_coco.json"
+    config['USE_BDD']=True
     # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 

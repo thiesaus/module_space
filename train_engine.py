@@ -25,7 +25,7 @@ import wandb
 from model.loss import SimilarityLoss
 from model.accuracy import test_accuracy
 from data.dataloader import get_dataloader
-
+from data.bdd_ov_reforged import get_bdd_dataloader,BDD_IDUNK
 # from model.test_hook import test
 
 sim_loss = SimilarityLoss(
@@ -50,8 +50,12 @@ def train(config: dict):
     # Load Pretrained Model
  
     # Data process
-    dataloader_train = get_dataloader('train', config, 'RMOT_Dataset', show=True)
-    dataloader_test = get_dataloader('test', config, 'RMOT_Dataset', show=False)
+    if config['USE_BDD']:
+        dataloader_train = get_bdd_dataloader('train', config, show=True)
+        dataloader_test = get_bdd_dataloader('test', config, show=False)
+    else:
+        dataloader_train = get_dataloader('train', config, 'RMOT_Dataset', show=True)
+        dataloader_test = get_dataloader('test', config, 'RMOT_Dataset', show=False)
     # dataset_train = build_dataset(config=config, split="train")
     # sampler_train = build_sampler(dataset=dataset_train, shuffle=True)
     # dataloader_train = build_dataloader(dataset=dataset_train, sampler=sampler_train,
@@ -296,7 +300,6 @@ def train_one_epoch(model: Weird_Model, train_states: dict, max_norm: float,
         # if not run:
         #     continue
         expression = data['target_expressions']
-        expression_ids = data['expression_id'].to(device)
         targets = data['target_labels'].view(-1).to(device)
 
         # forward
