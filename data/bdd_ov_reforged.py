@@ -286,7 +286,7 @@ class BDD_IDUNK(Dataset):
             step = sample_len // sample_num
             for idx in range(start_idx, stop_idx, step):
                 sampled_indices.append(idx + step // 2)
-        print("__getitem__ {} w {}".format(self.frame_data[video].keys(),sampled_indices))
+        print("__getitem__ {} w {} array: {}".format(self.frame_data[video].keys(),sampled_indices,[data['bbox'][idx][0] for idx in sampled_indices]))
 
         # load images
         images = [
