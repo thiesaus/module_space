@@ -145,7 +145,7 @@ def extract_frame_image_from_video(video_path:str,frame_ids):
     cap = cv2.VideoCapture(video_path)
     frames = defaultdict()
     H,W = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    print("exist path: {}, frame_ids : {}".format(os.path.exists(video_path),frame_ids))
+    print("path: {}, exist path: {}, frame_ids : {}".format(video_path,os.path.exists(video_path),frame_ids))
     for i in frame_ids:
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
@@ -286,6 +286,7 @@ class BDD_IDUNK(Dataset):
             step = sample_len // sample_num
             for idx in range(start_idx, stop_idx, step):
                 sampled_indices.append(idx + step // 2)
+        print("__getitem__ {} w {}".format(self.frame_data[video].keys(),sampled_indices))
 
         # load images
         images = [
