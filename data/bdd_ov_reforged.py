@@ -178,13 +178,14 @@ class BDD_IDUNK(Dataset):
         self.only_car = only_car  # 选择类别
         random.seed(config["SEED"])
         self.overall=standardlize(config["BDD_JSON_PATH"],config["BDD_DATA_ROOT"])
-        self.frame_data=self._parse_videos()
-        self._eliminate_usseless_frame()
         test=random.sample(list(self.overall['data'].keys()), len(self.overall['data'].keys())//5)
         train=[x for x in list(self.overall['data'].keys()) if x not in test]
         self.videos=dict({'test':test,
             'train':train
         })
+        self.frame_data=self._parse_videos()
+        self._eliminate_usseless_frame()
+
         self.transform = {idx: get_transform(mode, self.opt, idx) for idx in (0, 1, 2)}
         # self.exp_key = 'expression_new'  # 经处理后的expression标签
         self.data = self._parse_data()
