@@ -181,7 +181,7 @@ class BDD_IDUNK(Dataset):
         self.only_car = only_car  # 选择类别
         random.seed(config["SEED"])
         self.overall=standardlize(config["BDD_JSON_PATH"],config["BDD_DATA_ROOT"])
-        self.test_rate=config['TEST_RATE']*len(self.overall['data'].keys())//1
+        self.test_rate=int(float(config['TEST_RATE'])*len(self.overall['data'].keys()))
         test=random.sample(list(self.overall['data'].keys()),self.test_rate)
         train=[x for x in list(self.overall['data'].keys()) if x not in test]
         self.videos=dict({'test':test,
