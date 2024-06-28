@@ -236,12 +236,13 @@ class BDD_IDUNK(Dataset):
                     pre_frame_id = frame_id
                     for info in self.overall['data'][video][key][frame_id]:
                         # load box
-                        exps = [info['captions']]
+                        exps = [i for i in info['captions'] if i != None]
+                        target_labels = [int("{}-{}".format(obj_id,i) in list(self.overall['data'][video].keys())) for i in exps]
                         x, y, w, h = info['bbox']
                         # save
                         curr_data['expression'].append(exps)
                         curr_data['target_expression'].append(exps)
-                        curr_data['target_labels'].append(1)
+                        curr_data['target_labels'].append(target_labels)
                         curr_data['bbox'].append([frame_id, x , y , x + w, y + h])
                 if len(curr_data['bbox']) > self.opt["sample_frame_len"]:
                     data[obj_key] = curr_data.copy()
@@ -338,7 +339,7 @@ class BDD_IDUNK(Dataset):
                 for i in sampled_target_idx
             ]
             sampled_target_label = [
-                1
+                target_labels[i]
                 for i in sampled_target_idx
             ]
             # exp_id = self.exp2id[sampled_target_exp[0]]
@@ -362,16 +363,6 @@ class BDD_IDUNK(Dataset):
             stop_idx=stop_idx,
             data_key=data_key,
         )
-
-    def __len__(self):
-        return len(self.data_keys)
-
-    def show_information(self):
-        print(
-            f'===> BDD-100K ({self.mode}) <===\n'
-            f"Number of identities: {len(self.data)}"
-        )
-
 def dummy_transforms():
     return [ T.MultiToTensor(),
             T.MultiNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
