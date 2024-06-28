@@ -94,13 +94,15 @@ def standardlize(json_path,data_root):
     overall_dict['categories']=overall['categories']
 
     temp=ddddd()
+    caption_mapping=dd()
     for info in overall['train']:
         extracted_caption=  [i for i in info['captions'] if i != None]
+        caption_mapping[info['video_name']].extend(extracted_caption)
+    for info in overall['train']:
         for caption in extracted_caption:
             temp_info=info.copy()
-            temp_info['captions']=caption
+            temp_info['captions']=caption_mapping[info['video_name']]
             temp['data'][info['video_name']]["{}-{}".format(info['track_id'],caption)][info['frame_index']].append(temp_info)
-
     overall_dict['data']=temp['data']
     return overall_dict
 
@@ -362,6 +364,15 @@ class BDD_IDUNK(Dataset):
             start_idx=start_idx,
             stop_idx=stop_idx,
             data_key=data_key,
+        )
+    
+    def __len__(self):
+        return len(self.data_keys)
+
+    def show_information(self):
+        print(
+            f'===> BDD-100K ({self.mode}) <===\n'
+            f"Number of identities: {len(self.data)}"
         )
 def dummy_transforms():
     return [ T.MultiToTensor(),
