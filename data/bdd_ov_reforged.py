@@ -99,6 +99,7 @@ def standardlize(json_path,data_root):
         extracted_caption=  [i for i in info['captions'] if i != None]
         caption_mapping[info['video_name']].extend(extracted_caption)
     for info in overall['train']:
+        extracted_caption=  [i for i in info['captions'] if i != None]
         for caption in extracted_caption:
             temp_info=info.copy()
             temp_info['captions']=caption_mapping[info['video_name']]
