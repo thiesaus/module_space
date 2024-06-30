@@ -407,7 +407,7 @@ class Weird_Model(nn.Module):
         texts = x['sentences']
         b,n = imgs.size()[:2]
         # textual_hidden, text_feat = self.textual_encoding(texts)
-        text_feat ,textual_hidden= self.encode_text_2(texts)
+        text_feat ,textual_hidden= self.encode_text_2(texts,self.context_length)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
