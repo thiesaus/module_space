@@ -303,7 +303,7 @@ class Weird_Model(nn.Module):
         self.img_dim = 256
         self.text_dim = 256
         self.img_fc = self.get_img_fc(use_ln=False)
-        self.text_fc = self.get_text_fc(use_ln=False)
+        self.text_fc = self.get_text_fc(use_ln=True)
         self.seq_length=64
        
         
@@ -398,7 +398,7 @@ class Weird_Model(nn.Module):
         y2,_= self.local_attn_(local_feat,local_feat,local_feat)
         y2 = self.local_add_norm_(y2,local_feat)
 
-        # y3= self.text_attn_(text_feat)
+        y3= self.text_attn_(text_feat)
         return y1,y2,text_feat
 
     def forward(self, x, epoch=1e5):
@@ -407,7 +407,7 @@ class Weird_Model(nn.Module):
         texts = x['sentences']
         b,n = imgs.size()[:2]
         # textual_hidden, text_feat = self.textual_encoding(texts)
-        text_feat ,textual_hidden= self.encode_text_2(texts,self.context_length)
+        text_feat ,textual_hidden= self.encode_text_2(texts,20)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
@@ -417,7 +417,7 @@ class Weird_Model(nn.Module):
         text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
         text_feat = text_feat.repeat([1, n, 1, 1])
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        # text_feat = self.fusion_fc(text_feat)
+        text_feat = self.fusion_fc(text_feat)
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
