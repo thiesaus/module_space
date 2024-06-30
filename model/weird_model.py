@@ -1,7 +1,7 @@
 import math
 import numpy as np
 from os.path import join
-
+import os
 import torch
 from torch import nn, randn
 import torch.nn.functional as F
@@ -10,6 +10,7 @@ from einops import rearrange
 from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  RobertaModel
 from model.func import MLP,CausalSelfAttention
 from model.position_embedding import build
+from collections import OrderedDict
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
         super(BasicBlock, self).__init__()
@@ -216,6 +217,54 @@ class Weird_Attention(nn.Module):
         return output
 
 
+class LayerNorm(nn.LayerNorm):
+    """Subclass torch's LayerNorm to handle fp16."""
+
+    def forward(self, x: torch.Tensor):
+        orig_type = x.dtype
+        ret = super().forward(x.type(torch.float32))
+        return ret.type(orig_type)
+
+
+class QuickGELU(nn.Module):
+    def forward(self, x: torch.Tensor):
+        return x * torch.sigmoid(1.702 * x)
+
+
+class ResidualAttentionBlock(nn.Module):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+        super().__init__()
+
+        self.attn = nn.MultiheadAttention(d_model, n_head)
+        self.ln_1 = LayerNorm(d_model)
+        self.mlp = nn.Sequential(OrderedDict([
+            ("c_fc", nn.Linear(d_model, d_model * 4)),
+            ("gelu", QuickGELU()),
+            ("c_proj", nn.Linear(d_model * 4, d_model))
+        ]))
+        self.ln_2 = LayerNorm(d_model)
+        self.attn_mask = attn_mask
+
+    def attention(self, x: torch.Tensor):
+        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
+        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
+
+    def forward(self, x: torch.Tensor):
+        x = x + self.attention(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
+
+
+class Transformer(nn.Module):
+    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
+        super().__init__()
+        self.width = width
+        self.layers = layers
+        self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
+
+    def forward(self, x: torch.Tensor):
+        return self.resblocks(x)
+
 
 
 class Weird_Model(nn.Module):
@@ -227,7 +276,7 @@ class Weird_Model(nn.Module):
         self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         self.swinv2_model =Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256").to(self.device)
         self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
-        self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
+        # self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
         self._freeze_text_encoder()
 
          #reprocess image
@@ -284,7 +333,33 @@ class Weird_Model(nn.Module):
 
         self.weird_attn = Weird_Attention(self.feature_dim, self.num_heads, dropout=self.dropout)
 
+        transformer_width =self.text_dim
+        # state_dict["ln_final.weight"].shape[0]
+        transformer_heads = transformer_width // 64
+        transformer_layers = 4
+        # len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
+        #stolen from clip
+        self.context_length = 64
 
+        self.transformer = Transformer(
+            width=transformer_width,
+            layers=transformer_layers,
+            heads=transformer_heads,
+            attn_mask=self.build_attention_mask()
+        )
+        self.token_embedding = nn.Embedding(self.context_length, transformer_width,device=self.device)
+        self.positional_embedding =nn.Parameter(  torch.empty((self.context_length, transformer_width),device=self.device),requires_grad=True)
+        self.ln_final =LayerNorm(transformer_width)
+
+        self.text_projection =nn.Parameter( torch.empty((transformer_width, self.feature_dim),device=self.device),requires_grad=True)
+
+    def build_attention_mask(self):
+        # lazily create causal attention mask, with full attention between the vision tokens
+        # pytorch uses additive attention mask; fill with -inf
+        mask = torch.empty(self.context_length, self.context_length)
+        mask.fill_(float("-inf"))
+        mask.triu_(1)  # zero out the lower diagonal
+        return mask
 
     def _freeze_text_encoder(self):
         """
@@ -292,46 +367,13 @@ class Weird_Model(nn.Module):
         - list(self.clip.token_embedding.parameters())
         - [self.clip.positional_embedding]
         """
-        for p in list(self.bert_model.parameters()) + \
-                list(self.swinv2_model.parameters()):
+        # for p in list(self.tokenizer.parameters()) + \
+        #         list(self.swinv2_model.parameters()):
+        #     p.requires_grad = False
+        for p in  list(self.swinv2_model.parameters()):
             p.requires_grad = False
-        self.bert_model.eval()
+        # self.bert_model.eval()
         self.swinv2_model.eval()
-
-
-    def _init_weights_function(self, m):
-        if isinstance(m, nn.Linear):
-            nn.init.normal_(m.weight.data, 0, 0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.Conv1d):
-            fan_out = m.kernel_size[0] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-        elif isinstance(m, nn.Conv2d):
-            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-        elif isinstance(m, nn.BatchNorm1d):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        elif isinstance(m, nn.BatchNorm2d):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        elif isinstance(m, nn.LayerNorm):
-            m.weight.data.fill_(1.0)
-            m.bias.data.zero_()
-        else:
-            for p in m.parameters():
-                if p.dim() > 1:
-                    nn.init.xavier_uniform_(p)
 
     def encode_images(self,local_img,global_img):
         b, t = global_img.size()[:2]
@@ -366,15 +408,16 @@ class Weird_Model(nn.Module):
         y2,_= self.local_attn_(local_feat,local_feat,local_feat)
         y2 = self.local_add_norm_(y2,local_feat)
 
-        y3= self.text_attn_(text_feat)
-        return y1,y2,y3
+        # y3= self.text_attn_(text_feat)
+        return y1,y2,text_feat
 
     def forward(self, x, epoch=1e5):
         output = dict()
         imgs= x['local_images']
         texts = x['sentences']
         b,n = imgs.size()[:2]
-        textual_hidden, text_feat = self.textual_encoding(texts)
+        # textual_hidden, text_feat = self.textual_encoding(texts)
+        textual_hidden, text_feat = self.encode_text_2(texts)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
@@ -423,6 +466,7 @@ class Weird_Model(nn.Module):
 
     def textual_encoding(self, texts):
         text=self.text_encoder(texts)
+        text=self.ln_layer(text)
         text_hidden = self.text_linear_phase1(text)
         text_hidden = rearrange(text_hidden,"b w c -> b (w c)")
         text_hidden = self.text_linear_phase2(text_hidden)
@@ -457,7 +501,7 @@ class Weird_Model(nn.Module):
             )
 
     def text_encoder(self, text):  # [1,3,768]
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=64,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
                             "attention_mask": inputs["attention_mask"]}
 
@@ -465,6 +509,30 @@ class Weird_Model(nn.Module):
         return outputs.last_hidden_state
 
     
+
+    def encode_text_2(self, text, truncation=10):
+        # text=self.text_encoder(text)
+        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True)
+        text=torch.tensor(inputs['input_ids'],device=self.device,requires_grad=False)
+        x = self.token_embedding(text) # [batch_size, n_ctx, d_model]
+        batch_size = x.shape[0]
+        x = x + self.positional_embedding.unsqueeze(0).repeat(batch_size, 1, 1)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.ln_final(x)
+
+        hidden = x[torch.arange(x.shape[0]), :truncation] @ self.text_projection
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+
+        if self.training:
+            return hidden,x
+        else:
+            return hidden, F.normalize(x, p=2, dim=-1)
+
     def process_image(self,image):
 
         temp=self.image_encoder(image)
