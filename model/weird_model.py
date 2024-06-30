@@ -59,7 +59,7 @@ def make_layers(c_in, c_out, repeat_times, is_downsample=False):
     return nn.Sequential(*blocks)
 
 class FFN(nn.Module):
-    def __init__(self, d_model, dropout):
+    def __init__(self, d_model, dropout=0.1):
         super().__init__()
         self.mlp = nn.Linear(d_model, d_model)
         self.drop = nn.Dropout(dropout)
@@ -340,7 +340,7 @@ class Weird_Model(nn.Module):
             attn_mask=self.build_attention_mask()
         )
         self.positional_embedding =nn.Parameter(  torch.empty(self.context_length, transformer_width))
-        self.ln_final =nn.LayerNorm(transformer_width)
+        self.ln_final =FFN(transformer_width)
 
         self.text_projection =nn.Parameter( torch.empty(transformer_width, self.feature_dim))
 
@@ -398,8 +398,8 @@ class Weird_Model(nn.Module):
         y2,_= self.local_attn_(local_feat,local_feat,local_feat)
         y2 = self.local_add_norm_(y2,local_feat)
 
-        y3= self.text_attn_(text_feat)
-        return y1,y2,y3
+        # y3= self.text_attn_(text_feat)
+        return y1,y2,text_feat
 
     def forward(self, x, epoch=1e5):
         output = dict()
@@ -407,7 +407,7 @@ class Weird_Model(nn.Module):
         texts = x['sentences']
         b,n = imgs.size()[:2]
         # textual_hidden, text_feat = self.textual_encoding(texts)
-        text_feat ,textual_hidden= self.encode_text_2(texts,10)
+        textual_hidden,text_feat= self.encode_text_2(texts)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
@@ -500,7 +500,7 @@ class Weird_Model(nn.Module):
 
     
 
-    def encode_text_2(self, text, truncation=10):
+    def encode_text_2(self, text):
         # text=self.text_encoder(text)
         inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
@@ -514,16 +514,16 @@ class Weird_Model(nn.Module):
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_final(x)
 
-        hidden = x[torch.arange(x.shape[0]), :truncation] @ self.text_projection
+        hidden = x @ self.text_projection
 
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), inputs["input_ids"].argmax(dim=-1)] @ self.text_projection
         x = self.text_fc(x)
         if self.training:
-            return hidden,x
+            return x,hidden
         else:
-            return hidden, F.normalize(x, p=2, dim=-1)
+            return  F.normalize(x, p=2, dim=-1),hidden
 
     def process_image(self,image):
 
