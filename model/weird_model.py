@@ -270,8 +270,8 @@ class Weird_Model(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
         self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
         self._freeze_text_encoder()
-
-         #reprocess image
+        self.context_length=16
+           #reprocess image
 
         self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
@@ -331,16 +331,15 @@ class Weird_Model(nn.Module):
         transformer_layers = 4
         # len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
         #stolen from clip
-        self.context_length = 64
-
-        self.transformer = Transformer(
-            width=transformer_width,
-            layers=transformer_layers,
-            heads=transformer_heads,
-            attn_mask=self.build_attention_mask()
-        )
-        self.positional_embedding =nn.Parameter(  torch.empty(self.context_length, transformer_width))
-        self.ln_final =FFN(transformer_width)
+        self.encoder_attention_mask=self.build_attention_mask()
+        # self.transformer = Transformer(
+        #     width=transformer_width,
+        #     layers=transformer_layers,
+        #     heads=transformer_heads,
+        #     attn_mask=self.build_attention_mask()
+        # )
+        # self.positional_embedding =nn.Parameter(  torch.empty(self.context_length, transformer_width))
+        # self.ln_final =FFN(transformer_width)
 
         self.text_projection =nn.Parameter( torch.empty(transformer_width, self.feature_dim))
 
@@ -494,6 +493,7 @@ class Weird_Model(nn.Module):
         inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
                             "attention_mask": inputs["attention_mask"]}
+                           
 
         outputs = self.bert_model(**tokenizer_input)
         return outputs.last_hidden_state
@@ -504,15 +504,16 @@ class Weird_Model(nn.Module):
         # text=self.text_encoder(text)
         inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
-                            "attention_mask": inputs["attention_mask"]}
+                            "attention_mask": inputs["attention_mask"],
+                             "encoder_attention_mask":self.encoder_attention_mask}
 
         outputs = self.bert_model(**tokenizer_input)
         x= outputs.last_hidden_state        
-        x = x + self.positional_embedding
-        x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x)
+        # x = x + self.positional_embedding
+        # x = x.permute(1, 0, 2)  # NLD -> LND
+        # x = self.transformer(x)
+        # x = x.permute(1, 0, 2)  # LND -> NLD
+        # x = self.ln_final(x)
 
         hidden = x @ self.text_projection
 
