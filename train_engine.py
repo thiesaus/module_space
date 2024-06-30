@@ -322,7 +322,7 @@ def train_one_epoch(model: Weird_Model, train_states: dict, max_norm: float,
         # loss = loss / accumulation_steps
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
         optimizer.step()
         output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss)
         # plot_grad_flow(model.named_parameters())
