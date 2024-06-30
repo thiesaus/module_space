@@ -278,26 +278,6 @@ class Weird_Model(nn.Module):
         self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
                                         make_layers(512, 256, 2, is_downsample=True)])
         #reprocess text
-        self.text_linear_phase1=nn.Sequential(*[
-            nn.Linear(768, 384).to(self.device),
-            nn.GELU(),
-            nn.Linear(384, 192).to(self.device),
-            nn.GELU(),
-            nn.Linear(192, 96).to(self.device),
-            nn.GELU(),
-            nn.Linear(96, 64).to(self.device)
-            ])
-
-        self.text_linear_phase2=nn.Sequential(*[
-            nn.Linear(4096, 2048).to(self.device),
-            nn.GELU(),
-            nn.Linear(2048, 1024).to(self.device),
-            nn.GELU(),
-            nn.Linear(1024, 512).to(self.device),
-            nn.GELU(),
-            nn.Linear(512, 256).to(self.device)
-        ])
- 
         self.feature_dim=256
 
         self.img_dim = 256
@@ -327,20 +307,9 @@ class Weird_Model(nn.Module):
 
         transformer_width =768
         # state_dict["ln_final.weight"].shape[0]
-        transformer_heads = transformer_width // 64
-        transformer_layers = 4
         # len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
         #stolen from clip
         self.encoder_attention_mask=self.build_attention_mask()
-        # self.transformer = Transformer(
-        #     width=transformer_width,
-        #     layers=transformer_layers,
-        #     heads=transformer_heads,
-        #     attn_mask=self.build_attention_mask()
-        # )
-        # self.positional_embedding =nn.Parameter(  torch.empty(self.context_length, transformer_width))
-        # self.ln_final =FFN(transformer_width)
-
         self.text_projection =nn.Parameter( torch.empty(transformer_width, self.feature_dim))
 
     def build_attention_mask(self):
@@ -405,7 +374,6 @@ class Weird_Model(nn.Module):
         imgs= x['local_images']
         texts = x['sentences']
         b,n = imgs.size()[:2]
-        # textual_hidden, text_feat = self.textual_encoding(texts)
         textual_hidden,text_feat= self.encode_text_2(texts)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
@@ -416,7 +384,7 @@ class Weird_Model(nn.Module):
         text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
         text_feat = text_feat.repeat([1, n, 1, 1])
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        text_feat = self.fusion_fc(text_feat)
+        # text_feat = self.fusion_fc(text_feat)
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
@@ -451,19 +419,6 @@ class Weird_Model(nn.Module):
         # projection
         feat = self.img_fc(feat)
         return feat
-
-
-    def textual_encoding(self, texts):
-        text=self.text_encoder(texts)
-        text=self.ln_layer(text)
-        text_hidden = self.text_linear_phase1(text)
-        text_hidden = rearrange(text_hidden,"b w c -> b (w c)")
-        text_hidden = self.text_linear_phase2(text_hidden)
- 
-        if self.training:
-            return text_hidden,text
-        else:
-            return text_hidden, F.normalize(text, p=2, dim=-1)
 
     def get_img_fc(self, use_ln=True):
         if use_ln:
