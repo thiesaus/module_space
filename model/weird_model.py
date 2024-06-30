@@ -399,7 +399,7 @@ class Weird_Model(nn.Module):
         y2 = self.local_add_norm_(y2,local_feat)
 
         y3= self.text_attn_(text_feat)
-        return y1,y2,text_feat
+        return y1,y2,y3
 
     def forward(self, x, epoch=1e5):
         output = dict()
@@ -407,7 +407,7 @@ class Weird_Model(nn.Module):
         texts = x['sentences']
         b,n = imgs.size()[:2]
         # textual_hidden, text_feat = self.textual_encoding(texts)
-        text_feat ,textual_hidden= self.encode_text_2(texts,20)
+        text_feat ,textual_hidden= self.encode_text_2(texts,10)
 
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
