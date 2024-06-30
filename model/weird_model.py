@@ -397,8 +397,8 @@ class Weird_Model(nn.Module):
         y2,_= self.local_attn_(local_feat,local_feat,local_feat)
         y2 = self.local_add_norm_(y2,local_feat)
 
-        # y3= self.text_attn_(text_feat)
-        return y1,y2,text_feat
+        y3= self.text_attn_(text_feat)
+        return y1,y2,y3
 
     def forward(self, x, epoch=1e5):
         output = dict()
@@ -521,10 +521,9 @@ class Weird_Model(nn.Module):
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), inputs["input_ids"].argmax(dim=-1)] @ self.text_projection
         x = self.text_fc(x)
-        if self.training:
-            return x,hidden
-        else:
-            return  F.normalize(x, p=2, dim=-1),hidden
+        
+        return x,hidden
+
 
     def process_image(self,image):
 
