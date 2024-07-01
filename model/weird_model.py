@@ -270,7 +270,6 @@ class Weird_Model(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
         self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
         self._freeze_text_encoder()
-        self.context_length=16
            #reprocess image
 
         self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
@@ -284,7 +283,7 @@ class Weird_Model(nn.Module):
         self.text_dim = 256
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=True)
-        self.seq_length=64
+        self.seq_length=16
        
         
         local_reso = 4 * 4
@@ -313,7 +312,7 @@ class Weird_Model(nn.Module):
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens
         # pytorch uses additive attention mask; fill with -inf
-        mask = torch.empty(self.context_length, self.context_length)
+        mask = torch.empty(self.seq_length, self.seq_length)
         mask.fill_(float("-inf"))
         mask.triu_(1)  # zero out the lower diagonal
         return mask
@@ -444,7 +443,7 @@ class Weird_Model(nn.Module):
             )
 
     def text_encoder(self, text):  # [1,3,768]
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
                             "attention_mask": inputs["attention_mask"]}
                            
@@ -456,7 +455,7 @@ class Weird_Model(nn.Module):
 
     def encode_text_2(self, text):
         # text=self.text_encoder(text)
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.context_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
                             "attention_mask": inputs["attention_mask"],
                              "encoder_attention_mask":self.encoder_attention_mask}
