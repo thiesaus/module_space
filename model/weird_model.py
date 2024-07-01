@@ -267,8 +267,8 @@ class Weird_Model(nn.Module):
         self.dropout = 0.1
         self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         self.swinv2_model =Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256").to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base")
-        self.bert_model=  RobertaModel.from_pretrained("FacebookAI/roberta-base").to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained("princeton-nlp/sup-simcse-roberta-base")
+        self.bert_model=  RobertaModel.from_pretrained("princeton-nlp/sup-simcse-roberta-base").to(self.device)
         self._freeze_text_encoder()
            #reprocess image
 
@@ -283,7 +283,7 @@ class Weird_Model(nn.Module):
         self.text_dim = 256
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=True)
-        self.seq_length=16
+        self.seq_length=20
        
         
         local_reso = 4 * 4
