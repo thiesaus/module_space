@@ -263,8 +263,8 @@ class Weird_Model(nn.Module):
         self.text_dim = 768
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=False)
-        self.seq_length=64
-       
+        self.seq_length=20
+
         
         local_reso = 4 * 4
         local_scale = local_reso ** -0.5
@@ -399,7 +399,6 @@ class Weird_Model(nn.Module):
         k1 = rearrange(vis_feat,"(b n) c -> n b c",b=b)
         k2 = rearrange(textual_hidden,"(b n) c -> n b c",b=b)
         scores = torch.mean(F.cosine_similarity(k1, k2, dim=-1),0)
-            
 
         output['scores'] = scores
         output['vis_feat'] = vis_feat
@@ -457,7 +456,7 @@ class Weird_Model(nn.Module):
             )
 
     def text_encoder(self, text):  # [1,3,768]
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=64,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
         tokenizer_input = {"input_ids": inputs["input_ids"],
                             "attention_mask": inputs["attention_mask"]}
 
