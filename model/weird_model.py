@@ -407,11 +407,10 @@ class Weird_Model(nn.Module):
     def st_pooling(self, feat, bs):
         # spatial pooling
         feat = F.adaptive_avg_pool1d(feat, 1)  # [bt,c,l]->[bt,c]
-        # feat = rearrange(feat, 'b c t -> (b t) c')
-        # temporal pooling
-        # feat = rearrange(feat, '(b t) c -> b c t', b=bs)
-        feat = F.adaptive_avg_pool1d(feat, 1)  # [b,c]
-        feat = rearrange(feat, 'b c t -> (b t) c')
+       # this file change
+        feat=rearrange(feat, '(b t) c l -> b (c l) t',b=bs)
+        feat = F.adaptive_max_pool1d(feat, 1)  # [b,c]
+        feat = rearrange(feat, 'b c t -> b (t c)')
 
         # projection
         feat = self.img_fc(feat)
