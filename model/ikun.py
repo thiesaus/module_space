@@ -162,14 +162,22 @@ class FFN(nn.Module):
         return x
 
 
+class Id(AttentionPool2d):
+    def __init__(self, x=0,y=0,z=0):
+        super(Id, self).__init__(x,y,z)
+    def forward(self, x):
+        x = x.cuda()
+        return x
 class Model_IKUN(nn.Module):
     def __init__(self, opt):
         super().__init__()
         self.opt = opt
         self.clip = load_clip(
-            "C:\\Users\\phamp\\Desktop\\module_space\\RN50.pt",
+            opt["CLIP_CHECKPOINT"],
             input_resolution=224,
         )
+        self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.clip = self.clip.float()
         self.img_dim = 2048
         self.text_dim = 1024
@@ -182,6 +190,7 @@ class Model_IKUN(nn.Module):
             num_heads=4,
             dropout=0.,
         )
+        self.clip.visual.attnpool = Id().to(self.device)
 
         local_reso = 7 * 7
         local_scale = local_reso ** -0.5
@@ -271,7 +280,7 @@ class Model_IKUN(nn.Module):
         else:
             visual_feat = self.visual_local_global(x['local_img'], x['global_image'])
         logits = F.cosine_similarity(visual_feat, textual_feat)
-        output['logits'] = logits
+        output['scores'] = logits
         output['vis_feat'] = visual_feat
         output['text_feat'] = textual_feat
         return output
