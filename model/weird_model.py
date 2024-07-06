@@ -11,6 +11,124 @@ from transformers import AutoImageProcessor, Swinv2Model, AutoTokenizer,  Robert
 from model.func import MLP,CausalSelfAttention
 from model.position_embedding import build
 from collections import OrderedDict
+import clip
+from clip.model import CLIP, convert_weights
+from clip.model import AttentionPool2d
+
+def tokenize(text):
+    token = clip.tokenize(text)
+    return token
+
+class MyCLIP(CLIP):
+    def __init__(self, *args):
+        super(MyCLIP, self).__init__(*args)
+
+    def encode_text_2(self, text, truncation=10):
+        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+
+        x = x + self.positional_embedding.type(self.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.ln_final(x).type(self.dtype)
+
+        hidden = x[torch.arange(x.shape[0]), :truncation] @ self.text_projection
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+
+        return hidden, x
+
+    def encode_text_(self, text):
+        device = text.device
+        B, L = text.size()  # L=77 (i.e., context_length)
+
+        # original token/embedding
+        token = text.detach()
+        embedding = self.token_embedding(text).type(self.dtype).detach()
+
+        # new token/embedding
+        prompt_token = torch.zeros(B, 77)
+        text_embedding = self.embedding(torch.arange(77).to(device))[None, :].repeat(B, 1, 1)  # [batch_size, n_ctx, d_model]
+
+        # write token/embedding
+        prefix, postfix = 4, 4
+        for i in range(B):
+            ind = torch.argmax(token[i], -1)  # EoT
+            prompt_token[i, 0] = token[i, 0]
+            prompt_token[i, prefix+1:prefix+ind] = token[i, 1:ind]
+            prompt_token[i, prefix+ind+postfix] = token[i, ind]
+            text_embedding[i, 0] = embedding[i,0]
+            text_embedding[i, prefix+1: prefix+ind] = embedding[i, 1:ind]
+            text_embedding[i, prefix+ind+postfix] = embedding[i, ind]
+        prompt_token.to(device)
+        text_embedding.to(device)
+        x, text = text_embedding, prompt_token
+
+        # copy from the original codes
+        x = x + self.positional_embedding.type(self.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.ln_final(x).type(self.dtype)
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+
+        return x
+
+
+def load_clip(model_path, input_resolution=None):
+    state_dict = torch.jit.load(model_path).state_dict()
+
+    vit = "visual.proj" in state_dict
+
+    if vit:
+        vision_width = state_dict["visual.conv1.weight"].shape[0]
+        vision_layers = len(
+            [k for k in state_dict.keys() if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")])
+        vision_patch_size = state_dict["visual.conv1.weight"].shape[-1]
+        grid_size = round((state_dict["visual.positional_embedding"].shape[0] - 1) ** 0.5)
+        image_resolution = vision_patch_size * grid_size
+    else:
+        counts: list = [len(set(k.split(".")[2] for k in state_dict if k.startswith(f"visual.layer{b}"))) for b in
+                        [1, 2, 3, 4]]
+        vision_layers = tuple(counts)
+        vision_width = state_dict["visual.layer1.0.conv1.weight"].shape[0]
+        output_width = round((state_dict["visual.attnpool.positional_embedding"].shape[0] - 1) ** 0.5)
+        vision_patch_size = None
+        assert output_width ** 2 + 1 == state_dict["visual.attnpool.positional_embedding"].shape[0]
+        image_resolution = output_width * 32
+
+    embed_dim = state_dict["text_projection"].shape[1]
+    context_length = state_dict["positional_embedding"].shape[0]
+    vocab_size = state_dict["token_embedding.weight"].shape[0]
+    transformer_width = state_dict["ln_final.weight"].shape[0]
+    transformer_heads = transformer_width // 64
+    transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith(f"transformer.resblocks")))
+
+    if input_resolution is not None:
+        if input_resolution != image_resolution:
+            del state_dict['visual.attnpool.positional_embedding']
+        image_resolution = input_resolution
+
+    model = MyCLIP(
+        embed_dim,
+        image_resolution, vision_layers, vision_width, vision_patch_size,
+        context_length, vocab_size, transformer_width, transformer_heads, transformer_layers
+    )
+
+    for key in ["input_resolution", "context_length", "vocab_size"]:
+        if key in state_dict:
+            del state_dict[key]
+
+    convert_weights(model)
+    model.load_state_dict(state_dict, strict=False)
+
+    return model
+
 class BasicBlock(nn.Module):
     def __init__(self, c_in, c_out, is_downsample=False):
         super(BasicBlock, self).__init__()
@@ -257,19 +375,34 @@ class Transformer(nn.Module):
     def forward(self, x: torch.Tensor):
         return self.resblocks(x)
 
-
+class Id(AttentionPool2d):
+    def __init__(self, x=0,y=0,z=0):
+        super(Id, self).__init__(x,y,z)
+    def forward(self, x):
+        x = x.cuda()
+        return x
 
 class Weird_Model(nn.Module):
-    def __init__(self):
+    def __init__(self,config: dict):
         super().__init__()
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.num_heads = 4
         self.dropout = 0.1
         self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
         self.swinv2_model =Swinv2Model.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256").to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained("princeton-nlp/sup-simcse-roberta-base")
-        self.bert_model=  RobertaModel.from_pretrained("princeton-nlp/sup-simcse-roberta-base").to(self.device)
+        # self.tokenizer = AutoTokenizer.from_pretrained("princeton-nlp/sup-simcse-roberta-base")
+        # self.bert_model=  RobertaModel.from_pretrained("princeton-nlp/sup-simcse-roberta-base").to(self.device)
+        self.config=config
+
+        self.clip = load_clip(
+         config["CLIP_CHECKPOINT"],
+            input_resolution=224,
+        )
+        self.clip = self.clip.float()
+
+        self.clip.visual.attnpool = Id().to(self.device)
         self._freeze_text_encoder()
+        self._freeze_clip()
            #reprocess image
 
         self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
@@ -278,12 +411,11 @@ class Weird_Model(nn.Module):
                                         make_layers(512, 256, 2, is_downsample=True)])
         #reprocess text
         self.feature_dim=256
-
         self.img_dim = 256
-        self.text_dim = 256
+        self.text_dim = 1024
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=True)
-        self.seq_length=20
+        self.seq_length=config['TRUNCATION']
        
         
         local_reso = 4 * 4
@@ -323,11 +455,10 @@ class Weird_Model(nn.Module):
         - list(self.clip.token_embedding.parameters())
         - [self.clip.positional_embedding]
         """
-        for p in list(self.bert_model.parameters()) + \
-                list(self.swinv2_model.parameters()):
+        for p in list(self.swinv2_model.parameters()):
             p.requires_grad = False
      
-        self.bert_model.eval()
+        # self.bert_model.eval()
         self.swinv2_model.eval()
 
     def encode_images(self,local_img,global_img):
@@ -365,14 +496,28 @@ class Weird_Model(nn.Module):
 
         y3= self.text_attn_(text_feat)
         return y1,y2,y3
+    def _freeze_clip(self):
+        for p in list(self.clip.transformer.parameters()) + \
+                 list(self.clip.ln_final.parameters()) + \
+                 [self.clip.text_projection, ]:
+            p.requires_grad = False
+    
+    def textual_encoding_clip(self, tokens):
+        x_hidden, x = self.clip.encode_text_2(tokens, self.config["TRUNCATION"])
+        x = self.text_fc(x)
+        if self.training:
+            return x_hidden, x
+        else:
+            return x_hidden, F.normalize(x, p=2, dim=-1)
 
     def forward(self, x, epoch=1e5):
         output = dict()
         imgs= x['local_images']
         texts = x['sentences']
         b,n = imgs.size()[:2]
-        textual_hidden,text_feat= self.encode_text_2(texts)
-
+        # textual_hidden,text_feat= self.encode_text_2(texts)
+        exp =  tokenize(texts).cuda()
+        text_feat,textual_hidden = self.textual_encoding_clip(exp)
         local_feat,global_feat = self.encode_images(x['local_images'],x['global_image'])
 
         #text-guided
@@ -441,34 +586,34 @@ class Weird_Model(nn.Module):
                 nn.Linear(self.text_dim, self.feature_dim),
             )
 
-    def text_encoder(self, text):  # [1,3,768]
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
-        tokenizer_input = {"input_ids": inputs["input_ids"],
-                            "attention_mask": inputs["attention_mask"]}
+    # def text_encoder(self, text):  # [1,3,768]
+    #     inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+    #     tokenizer_input = {"input_ids": inputs["input_ids"],
+    #                         "attention_mask": inputs["attention_mask"]}
                            
 
-        outputs = self.bert_model(**tokenizer_input)
-        return outputs.last_hidden_state
+    #     outputs = self.bert_model(**tokenizer_input)
+    #     return outputs.last_hidden_state
 
     
 
-    def encode_text_2(self, text):
-        # text=self.text_encoder(text)
-        inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
-        tokenizer_input = {"input_ids": inputs["input_ids"],
-                            "attention_mask": inputs["attention_mask"],
-                             "encoder_attention_mask":self.encoder_attention_mask}
+    # def encode_text_2(self, text):
+    #     # text=self.text_encoder(text)
+    #     inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
+    #     tokenizer_input = {"input_ids": inputs["input_ids"],
+    #                         "attention_mask": inputs["attention_mask"],
+    #                          "encoder_attention_mask":self.encoder_attention_mask}
 
-        outputs = self.bert_model(**tokenizer_input)
-        x= outputs.last_hidden_state        
-        hidden = x @ self.text_projection
+    #     outputs = self.bert_model(**tokenizer_input)
+    #     x= outputs.last_hidden_state        
+    #     hidden = x @ self.text_projection
 
-        # x.shape = [batch_size, n_ctx, transformer.width]
-        # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), inputs["input_ids"].argmax(dim=-1)] @ self.text_projection
-        x = self.text_fc(x)
+    #     # x.shape = [batch_size, n_ctx, transformer.width]
+    #     # take features from the eot embedding (eot_token is the highest number in each sequence)
+    #     x = x[torch.arange(x.shape[0]), inputs["input_ids"].argmax(dim=-1)] @ self.text_projection
+    #     x = self.text_fc(x)
         
-        return x,hidden
+    #     return x,hidden
 
 
     def process_image(self,image):
@@ -486,7 +631,7 @@ class Weird_Model(nn.Module):
 
 def build_weird_model(config: dict):
 
-    model = Weird_Model()
+    model = Weird_Model(config)
     if config["AVAILABLE_GPUS"] is not None and config["DEVICE"] == "cuda":
         model.to(device=torch.device(config["DEVICE"], distributed_rank()))
     else:

@@ -11,7 +11,7 @@ from clip.model import CLIP, convert_weights
 
 from einops import rearrange
 from utils.utils import distributed_rank
-
+from clip.model import AttentionPool2d
 
 def tokenize(text):
     token = clip.tokenize(text)
@@ -90,7 +90,13 @@ class MyCLIP(CLIP):
         x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
 
         return x
-
+class Id(AttentionPool2d):
+    def __init__(self, x=0,y=0,z=0):
+        super(Id, self).__init__(x,y,z)
+    def forward(self, x):
+        x = x.cuda()
+        return x
+    
 
 def load_clip(model_path, input_resolution=None):
     state_dict = torch.jit.load(model_path).state_dict()

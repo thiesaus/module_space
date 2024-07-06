@@ -37,6 +37,8 @@ if __name__ == "__main__":
     config["NUM_LAYERS"]=[4,4,4]
     config["TEST_DIST"]=1
     config["WANDB"]=False
+    config["CLIP_CHECKPOINT"]="C:\\Users\\phamp\\Desktop\\module_space\\RN50.pt"
+    config["TRUNCATION"]=20
     # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 
