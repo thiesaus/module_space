@@ -854,7 +854,7 @@ class Track_MeMOTR(Dataset):
         DATA = list()
         for video in VIDEOS[self.mode]:
             # load tracks
-            tracks_1 = np.loadtxt(join(self.opt["memotr_root"],self.opt['memotr_checkpoint'].upper(),self.opt, video, 'car', 'predict.txt'), delimiter=',')
+            tracks_1 = np.loadtxt(join(self.opt["memotr_root"],self.opt['memotr_checkpoint'].upper(), video, 'car', 'predict.txt'), delimiter=',')
             if len(tracks_1.shape) == 2:
                 tracks = tracks_1
                 max_obj_id = max(tracks_1[:, 1])
