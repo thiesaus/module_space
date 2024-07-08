@@ -115,7 +115,7 @@ TRAIN_COCO: outputs\memotr_mot17_coco\train\mot17_train_coco_reforged.json
 F: path
 FREEZE_MEMOTR: true
 TG_EPOCH: 0
-TRUNCATION: 10
+truncation: 10
 FEATURE_DIM: 1024
 CLIP_MODEL: RN50
 KUM_MODE: cascade attention

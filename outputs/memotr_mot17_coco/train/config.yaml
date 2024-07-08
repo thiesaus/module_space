@@ -121,7 +121,7 @@ TG_EPOCH: 0
 TP_DROP_RATE: 0.0
 TRACK_SCORE_THRESH: 0.5
 TRAIN_COCO: D:\Thesis\DamnShit\Hello\MeMOTR_IKUN\outputs\memotr_mot17_coco\train\mot17_train_coco_reforged.json
-TRUNCATION: 10
+truncation: 10
 UPDATE_THRESH: 0.5
 USE_CHECKPOINT: false
 USE_CROWDHUMAN: true

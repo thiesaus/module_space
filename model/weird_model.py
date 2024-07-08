@@ -395,7 +395,7 @@ class Weird_Model(nn.Module):
         self.config=config
 
         self.clip = load_clip(
-         config["CLIP_CHECKPOINT"],
+         config["clip_checkpoint"],
             input_resolution=224,
         )
         self.clip = self.clip.float()
@@ -415,7 +415,7 @@ class Weird_Model(nn.Module):
         self.text_dim = 1024
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=True)
-        self.seq_length=config['TRUNCATION']
+        self.seq_length=config['truncation']
        
         
         local_reso = 4 * 4
@@ -503,7 +503,7 @@ class Weird_Model(nn.Module):
             p.requires_grad = False
     
     def textual_encoding_clip(self, tokens):
-        x_hidden, x = self.clip.encode_text_2(tokens, self.config["TRUNCATION"])
+        x_hidden, x = self.clip.encode_text_2(tokens, self.config["truncation"])
         x = self.text_fc(x)
         if self.training:
             return x_hidden, x

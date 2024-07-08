@@ -173,7 +173,7 @@ class Model_IKUN(nn.Module):
         super().__init__()
         self.opt = opt
         self.clip = load_clip(
-            opt["CLIP_CHECKPOINT"],
+            opt["clip_checkpoint"],
             input_resolution=224,
         )
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
