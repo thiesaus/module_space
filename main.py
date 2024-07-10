@@ -11,33 +11,33 @@ def yaml_to_dict(path: str):
 if __name__ == "__main__":
     # filter_module = FilterModule()
 
-    config = yaml_to_dict(".\\configs\\train_mot17_coco.yaml")
+    config = yaml_to_dict("./configs/train_mot17_coco.yaml")
     config["DATA_ROOT"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR"
     config["TRAIN_COCO"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\outputs\\memotr_mot17_coco\\train\\mot17_train_coco_reforged.json"
     config["NO_TRANSFORM"]=True
-    config["EPOCHS"]=200
-    config["EPOCHS_SPACE"]=20
+    config["EPOCHS"]=400
+    config["EPOCHS_SPACE"]=50
     config["LR_SCHEDULER"] == "Cosine"
     # ik
-    config["train_bs"]=10
+    config["train_bs"]=8
     config["test_bs"]=1
     config["num_workers"]=4
     config["img_hw"]=[(224, 224), (448, 448), (672, 672)]
     config["random_crop_ratio"]=[0.8, 1.0]
     config["norm_mean"]=[0.48145466, 0.4578275, 0.40821073]
     config["norm_std"]=[0.26862954, 0.26130258, 0.27577711]
-    config["rf_kitti_json"]="C:\\Users\\phamp\\Desktop\\module_space\\outputs\\Refer-KITTI_labels.json"
-    config["rf_expression"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR\\Refer_Kitti\\expression"
+    config["rf_kitti_json"]="/root/Refer-KITTI_labels.json"
+    config["rf_expression"]="./refer-kitti/expression"
     config["sample_frame_len"]=8
     config["sample_frame_num"]=2
-    config["data_root"]="D:\\Thesis\\DamnShit\\Hello\\MeMOTR_IKUN\\DATA_DIR\\Refer_Kitti"
+    config["data_root"]="./refer-kitti"
     config["sample_expression_num"]=1
     config["sample_frame_stride"]=4
     config["track_root"]=""
     config["NUM_LAYERS"]=[4,4,4]
-    config["TEST_DIST"]=1
-    config["WANDB"]=False
-    config["clip_checkpoint"]="C:\\Users\\phamp\\Desktop\\module_space\\RN50.pt"
+    config["TEST_DIST"]=10
+    config["WANDB"]=True
+    config["clip_checkpoint"]="/root/CLIP/RN50.pt"
     config["truncation"]=10
     # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 

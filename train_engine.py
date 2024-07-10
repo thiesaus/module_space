@@ -315,7 +315,7 @@ def train_one_epoch(model: Model_IKUN, train_states: dict, max_norm: float,
         # criterion.process(model_outputs=model_outputs,batch_idx=i)
         # loss_dict,log_dict=criterion.get_loss_and_log()
         scores = model_outputs['scores']
-        contrastive_loss = model_outputs['loss']
+        contrastive_loss =0
         loss =sim_loss(scores, targets) + contrastive_loss
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
