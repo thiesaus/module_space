@@ -840,7 +840,7 @@ class Track_Dataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-class Track_MeMOTR(Dataset):
+class Other_Track(Dataset):
     def __init__(self, mode, opt):
         self.opt = opt
         self.mode = mode
@@ -854,14 +854,14 @@ class Track_MeMOTR(Dataset):
         DATA = list()
         for video in VIDEOS[self.mode]:
             # load tracks
-            tracks_1 = np.loadtxt(join(self.opt["memotr_root"],self.opt['memotr_checkpoint'].upper(), video, 'car', 'predict.txt'), delimiter=',')
+            tracks_1 = np.loadtxt(join(self.opt['track_result'], video, 'car', 'predict.txt'), delimiter=',')
             if len(tracks_1.shape) == 2:
                 tracks = tracks_1
                 max_obj_id = max(tracks_1[:, 1])
             else:
                 tracks = np.empty((0, 10))
                 max_obj_id = 0
-            tracks_2 = np.loadtxt(join(self.opt["memotr_root"],self.opt['memotr_checkpoint'].upper(), video, 'pedestrian', 'predict.txt'), delimiter=',')
+            tracks_2 = np.loadtxt(join(self.opt['track_result'], video, 'pedestrian', 'predict.txt'), delimiter=',')
             if len(tracks_2.shape) == 2:
                 tracks_2[:, 1] += max_obj_id
                 tracks = np.concatenate((tracks, tracks_2), axis=0)

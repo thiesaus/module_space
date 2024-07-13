@@ -39,6 +39,7 @@ if __name__ == "__main__":
     config["WANDB"]=False
     config["clip_checkpoint"]="C:\\Users\\phamp\\Desktop\\module_space\\RN50.pt"
     config["truncation"]=20
+    config["track_result"]=""
     # config["RESUME"]="C:\\Users\\phamp\\Desktop\\module_space\\checkpoint_99.pth"
 
 
