@@ -346,7 +346,7 @@ class Weird_Model(nn.Module):
         global_scale = global_reso ** -0.5
         self.pos_emb_global = nn.Parameter(global_scale * randn(global_reso))
 
-        # self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
+        self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         self.fusion_ffn = FFN(self.img_dim, 0.1)
 
         self.global_attn_ = nn.MultiheadAttention(self.feature_dim, self.num_heads, dropout=self.dropout)
@@ -447,7 +447,7 @@ class Weird_Model(nn.Module):
         text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
         text_feat = text_feat.repeat([1, n, 1, 1])
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        # text_feat = self.fusion_fc(text_feat)
+        text_feat = self.fusion_fc(text_feat)
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
@@ -479,7 +479,7 @@ class Weird_Model(nn.Module):
         feat = rearrange(feat, 'b c t -> b (t c)')
 
         # projection
-        feat = self.img_fc(feat)
+        # feat = self.img_fc(feat)
         return feat
 
 
