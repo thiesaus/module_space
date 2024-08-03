@@ -40,46 +40,6 @@ class MyCLIP(CLIP):
 
         return hidden, x
 
-    def encode_text_(self, text):
-        device = text.device
-        B, L = text.size()  # L=77 (i.e., context_length)
-
-        # original token/embedding
-        token = text.detach()
-        embedding = self.token_embedding(text).type(self.dtype).detach()
-
-        # new token/embedding
-        prompt_token = torch.zeros(B, 77)
-        text_embedding = self.embedding(torch.arange(77).to(device))[None, :].repeat(B, 1, 1)  # [batch_size, n_ctx, d_model]
-
-        # write token/embedding
-        prefix, postfix = 4, 4
-        for i in range(B):
-            ind = torch.argmax(token[i], -1)  # EoT
-            prompt_token[i, 0] = token[i, 0]
-            prompt_token[i, prefix+1:prefix+ind] = token[i, 1:ind]
-            prompt_token[i, prefix+ind+postfix] = token[i, ind]
-            text_embedding[i, 0] = embedding[i,0]
-            text_embedding[i, prefix+1: prefix+ind] = embedding[i, 1:ind]
-            text_embedding[i, prefix+ind+postfix] = embedding[i, ind]
-        prompt_token.to(device)
-        text_embedding.to(device)
-        x, text = text_embedding, prompt_token
-
-        # copy from the original codes
-        x = x + self.positional_embedding.type(self.dtype)
-        x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x).type(self.dtype)
-
-        # x.shape = [batch_size, n_ctx, transformer.width]
-        # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
-
-        return x
-
-
 def load_clip(model_path, input_resolution=None):
     state_dict = torch.jit.load(model_path).state_dict()
 
@@ -336,45 +296,6 @@ class Weird_Attention(nn.Module):
 
 
 
-class QuickGELU(nn.Module):
-    def forward(self, x: torch.Tensor):
-        return x * torch.sigmoid(1.702 * x)
-
-
-class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
-        super().__init__()
-
-        self.attn = nn.MultiheadAttention(d_model, n_head)
-        self.ln_1 =nn.LayerNorm(d_model)
-        self.mlp = nn.Sequential(OrderedDict([
-            ("c_fc", nn.Linear(d_model, d_model * 4)),
-            ("gelu", QuickGELU()),
-            ("c_proj", nn.Linear(d_model * 4, d_model))
-        ]))
-        self.ln_2 = nn.LayerNorm(d_model)
-        self.attn_mask = attn_mask
-
-    def attention(self, x: torch.Tensor):
-        self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
-        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
-
-    def forward(self, x: torch.Tensor):
-        x = x + self.attention(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
-
-
-class Transformer(nn.Module):
-    def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
-        super().__init__()
-        self.width = width
-        self.layers = layers
-        self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
-
-    def forward(self, x: torch.Tensor):
-        return self.resblocks(x)
-
 class Id(AttentionPool2d):
     def __init__(self, x=0,y=0,z=0):
         super(Id, self).__init__(x,y,z)
@@ -405,13 +326,13 @@ class Weird_Model(nn.Module):
         self._freeze_clip()
            #reprocess image
 
-        self.cnn_image_local=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
-                                        make_layers(512, 256, 2, is_downsample=True)])
-        self.cnn_image_global=nn.Sequential(*[make_layers(768, 512, 2, is_downsample=False),
-                                        make_layers(512, 256, 2, is_downsample=True)])
+        self.cnn_image_local=nn.Sequential(*[make_layers(768, 1024, 2, is_downsample=False),
+                                        make_layers(1024, 1024, 2, is_downsample=True)])
+        self.cnn_image_global=nn.Sequential(*[make_layers(768, 1024, 2, is_downsample=False),
+                                        make_layers(1024, 1024, 2, is_downsample=True)])
         #reprocess text
-        self.feature_dim=256
-        self.img_dim = 256
+        self.feature_dim=1024
+        self.img_dim = 1024
         self.text_dim = 1024
         self.img_fc = self.get_img_fc(use_ln=False)
         self.text_fc = self.get_text_fc(use_ln=True)
@@ -425,7 +346,7 @@ class Weird_Model(nn.Module):
         global_scale = global_reso ** -0.5
         self.pos_emb_global = nn.Parameter(global_scale * randn(global_reso))
 
-        self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
+        # self.fusion_fc = nn.Linear(self.text_dim, self.img_dim)
         self.fusion_ffn = FFN(self.img_dim, 0.1)
 
         self.global_attn_ = nn.MultiheadAttention(self.feature_dim, self.num_heads, dropout=self.dropout)
@@ -526,7 +447,7 @@ class Weird_Model(nn.Module):
         text_feat = text_feat.unsqueeze(1)  # [b,l,c]->[b,1,l,c]
         text_feat = text_feat.repeat([1, n, 1, 1])
         text_feat = rearrange(text_feat, 'b t l c -> (b t) l c')
-        text_feat = self.fusion_fc(text_feat)
+        # text_feat = self.fusion_fc(text_feat)
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
@@ -563,12 +484,6 @@ class Weird_Model(nn.Module):
 
 
     def get_img_fc(self, use_ln=True):
-        if use_ln:
-            return nn.Sequential(
-                nn.Linear(self.img_dim, self.feature_dim),
-                nn.LayerNorm(self.feature_dim, eps=1e-12),
-            )
-        else:
             return nn.Linear(self.img_dim, self.feature_dim)
 
     def get_text_fc(self, use_ln=True):
@@ -579,43 +494,7 @@ class Weird_Model(nn.Module):
                 nn.Linear(self.text_dim, self.feature_dim),
                 nn.LayerNorm(self.feature_dim, eps=1e-12),
             )
-        else:
-            return nn.Sequential(
-                nn.Linear(self.text_dim, self.text_dim),
-                nn.ReLU(),
-                nn.Linear(self.text_dim, self.feature_dim),
-            )
-
-    # def text_encoder(self, text):  # [1,3,768]
-    #     inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
-    #     tokenizer_input = {"input_ids": inputs["input_ids"],
-    #                         "attention_mask": inputs["attention_mask"]}
-                           
-
-    #     outputs = self.bert_model(**tokenizer_input)
-    #     return outputs.last_hidden_state
-
     
-
-    # def encode_text_2(self, text):
-    #     # text=self.text_encoder(text)
-    #     inputs = self.tokenizer.batch_encode_plus(text,max_length=self.seq_length,padding="max_length",  return_special_tokens_mask=True, return_tensors="pt",  truncation=True).to(self.device)
-    #     tokenizer_input = {"input_ids": inputs["input_ids"],
-    #                         "attention_mask": inputs["attention_mask"],
-    #                          "encoder_attention_mask":self.encoder_attention_mask}
-
-    #     outputs = self.bert_model(**tokenizer_input)
-    #     x= outputs.last_hidden_state        
-    #     hidden = x @ self.text_projection
-
-    #     # x.shape = [batch_size, n_ctx, transformer.width]
-    #     # take features from the eot embedding (eot_token is the highest number in each sequence)
-    #     x = x[torch.arange(x.shape[0]), inputs["input_ids"].argmax(dim=-1)] @ self.text_projection
-    #     x = self.text_fc(x)
-        
-    #     return x,hidden
-
-
     def process_image(self,image):
 
         temp=self.image_encoder(image)

@@ -314,8 +314,8 @@ def train_one_epoch(model: Weird_Model, train_states: dict, max_norm: float,
         # criterion.process(model_outputs=model_outputs,batch_idx=i)
         # loss_dict,log_dict=criterion.get_loss_and_log()
         scores = model_outputs['scores']
-        contrastive_loss = model_outputs['loss']
-        loss =sim_loss(scores, targets) + contrastive_loss
+        # contrastive_loss = model_outputs['loss']
+        loss =sim_loss(scores, targets) 
         # loss= criterion.get_sum_loss_dict(loss_dict=loss_dict)
         # Metrics log
         metric_log.update(name="total_loss", value=loss.item())
@@ -324,7 +324,7 @@ def train_one_epoch(model: Weird_Model, train_states: dict, max_norm: float,
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
         optimizer.step()
-        output_dict["train"]=dict(epoch=epoch,loss=loss.item(),contrastive_loss=contrastive_loss)
+        output_dict["train"]=dict(epoch=epoch,loss=loss.item())
         # plot_grad_flow(model.named_parameters())
         # if (i + 1) % accumulation_steps == 0:
         #     # if max_norm > 0:
