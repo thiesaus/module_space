@@ -1,5 +1,6 @@
 import os
 import torch
+import math
 from logger import Logger, ProgressLogger,MetricLog
 from torch.optim import Adam, AdamW
 from data import build_dataset, build_sampler, build_dataloader
@@ -33,6 +34,26 @@ sim_loss = SimilarityLoss(
     gamma=2.0,
     reduction="sum",
 )
+
+
+def get_lr(opt, curr_epoch):
+ 
+    return (
+            0
+            + (1e-5 - 0)
+            * (
+                math.cos(
+                    math.pi * (curr_epoch - 0) / (opt["EPOCHS"] - 0)
+                )
+                + 1.0
+            )
+            * 0.5
+        )
+
+
+def set_lr(optimizer, lr):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 def train(config: dict):
@@ -82,7 +103,7 @@ def train(config: dict):
 
     # Optimizer
     param_groups, lr_names = get_param_groups(config=config, model=model)
-    optimizer = AdamW(params=param_groups, lr=config["LR"], weight_decay=config["WEIGHT_DECAY"])
+    optimizer = AdamW(params=param_groups, lr=1e-5, weight_decay=config["WEIGHT_DECAY"])
     if config["WANDB"]:
         wandb.init(
         # Set the project where this run will be logged
@@ -149,16 +170,19 @@ def train(config: dict):
         #     optimizer.param_groups[0]["lr"] = 0.0
         #     optimizer.param_groups[1]["lr"] = 0.0
         #     optimizer.param_groups[3]["lr"] = 0.0
-        lrs = [optimizer.param_groups[_]["lr"] for _ in range(len(optimizer.param_groups))]
-        assert len(lrs) == len(lr_names)
-        lr_info = [{name: lr} for name, lr in zip(lr_names, lrs)]
-        train_logger.show(head=f"[Epoch {epoch}] lr={lr_info}")
-        train_logger.write(head=f"[Epoch {epoch}] lr={lr_info}")
+        lr = get_lr(config, epoch)
+        set_lr(optimizer, lr)
+        # lrs = [optimizer.param_groups[_]["lr"] for _ in range(len(optimizer.param_groups))]
+        # assert len(lrs) == len(lr_names)
+        # lr_info = [{name: lr} for name, lr in zip(lr_names, lrs)]
+        train_logger.show(head=f"[Epoch {epoch}] lr={lr}")
+        train_logger.write(head=f"[Epoch {epoch}] lr={lr}")
+
         default_lr_idx = -1
         for _ in range(len(lr_names)):
             if lr_names[_] == "lr":
                 default_lr_idx = _
-        train_logger.tb_add_scalar(tag="lr", scalar_value=lrs[default_lr_idx], global_step=epoch, mode="epochs")
+        # train_logger.tb_add_scalar(tag="lr", scalar_value=lrs[default_lr_idx], global_step=epoch, mode="epochs")
 
         no_grad_frames = None
         if "NO_GRAD_FRAMES" in config:
