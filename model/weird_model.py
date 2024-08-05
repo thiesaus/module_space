@@ -530,7 +530,7 @@ class Weird_Model(nn.Module):
 
         global_feat,local_feat,text_feat = self.self_attentions(global_feat,local_feat,text_feat)
 
-        visual_feat = self.weird_attn(local_feat,text_feat,global_feat,batch_first=True) 
+        visual_feat = self.weird_attn(global_feat,text_feat,local_feat,batch_first=True) 
         visual_feat = visual_feat * local_feat
         vis_feat = rearrange(visual_feat, "bt l c -> bt c l")
         vis_feat = self.st_pooling(vis_feat, bs=b)
